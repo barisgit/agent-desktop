@@ -57,6 +57,10 @@ mod imp {
                 actions: &["AXPress", "AXConfirm"],
                 limit: 2,
             },
+            ChainStep::CGClickToPid {
+                button: MouseButton::Left,
+                count: 1,
+            },
             ChainStep::CGClick {
                 button: MouseButton::Left,
                 count: 1,
@@ -87,6 +91,10 @@ mod imp {
             ChainStep::Custom {
                 label: "ancestor_show_menu",
                 func: chain_menu_steps::show_menu_on_ancestors,
+            },
+            ChainStep::CGClickToPid {
+                button: MouseButton::Right,
+                count: 1,
             },
             ChainStep::CGClick {
                 button: MouseButton::Right,
@@ -154,6 +162,10 @@ mod imp {
                 attr: "AXSelected",
                 value: true,
             },
+            ChainStep::CGClickToPid {
+                button: MouseButton::Left,
+                count: 1,
+            },
             ChainStep::CGClick {
                 button: MouseButton::Left,
                 count: 1,
@@ -187,6 +199,13 @@ mod imp {
         if ax_helpers::has_ax_action(el, "AXOpen") && ax_helpers::try_ax_action(el, "AXOpen") {
             return Ok(());
         }
+        if headless_pid_click_permitted(policy) {
+            if let Ok(()) =
+                crate::actions::dispatch::click_via_bounds_to_pid(el, MouseButton::Left, 2, policy)
+            {
+                return Ok(());
+            }
+        }
         crate::actions::dispatch::click_via_bounds(el, MouseButton::Left, 2, policy)
     }
 
@@ -198,7 +217,18 @@ mod imp {
         el: &AXElement,
         policy: InteractionPolicy,
     ) -> Result<(), AdapterError> {
+        if headless_pid_click_permitted(policy) {
+            if let Ok(()) =
+                crate::actions::dispatch::click_via_bounds_to_pid(el, MouseButton::Left, 3, policy)
+            {
+                return Ok(());
+            }
+        }
         crate::actions::dispatch::click_via_bounds(el, MouseButton::Left, 3, policy)
+    }
+
+    fn headless_pid_click_permitted(policy: InteractionPolicy) -> bool {
+        !policy.allow_focus_steal && !policy.allow_cursor_move
     }
 }
 

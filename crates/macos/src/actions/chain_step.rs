@@ -41,4 +41,8 @@ pub(crate) enum ChainStep {
         button: MouseButton,
         count: u32,
     },
+    CGClickToPid {
+        button: MouseButton,
+        count: u32,
+    },
 }

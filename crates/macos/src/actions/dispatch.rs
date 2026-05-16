@@ -63,6 +63,56 @@ mod imp {
         })
     }
 
+    pub(crate) fn click_via_bounds_to_pid(
+        el: &AXElement,
+        button: MouseButton,
+        count: u32,
+        policy: InteractionPolicy,
+    ) -> Result<(), AdapterError> {
+        if policy.allow_cursor_move || policy.allow_focus_steal {
+            return Err(AdapterError::policy_denied(
+                "Headless pid click requires the headless interaction policy",
+            ));
+        }
+        let pid = crate::system::app_ops::pid_from_element(el).ok_or_else(|| {
+            AdapterError::new(
+                ErrorCode::ActionFailed,
+                "Element has no resolvable process id",
+            )
+            .with_suggestion("AX action failed and headless pid click is unavailable")
+        })?;
+        let bounds = crate::tree::read_bounds(el).ok_or_else(|| {
+            AdapterError::new(ErrorCode::ActionFailed, "Element has no readable bounds")
+                .with_suggestion("AX action failed and headless pid click is unavailable")
+        })?;
+        if bounds.width <= 0.0 || bounds.height <= 0.0 {
+            return Err(
+                AdapterError::new(ErrorCode::ActionFailed, "Element has zero-size bounds")
+                    .with_suggestion("Element may be hidden or off-screen. Try 'scroll-to' first."),
+            );
+        }
+        let center = Point {
+            x: bounds.x + bounds.width / 2.0,
+            y: bounds.y + bounds.height / 2.0,
+        };
+        tracing::debug!(
+            ?button,
+            count,
+            pid,
+            x = center.x,
+            y = center.y,
+            "AX action failed, falling back to CGEventPostToPid click"
+        );
+        crate::input::mouse::synthesize_mouse_to_pid(
+            MouseEvent {
+                kind: MouseEventKind::Click { count },
+                point: center,
+                button,
+            },
+            pid,
+        )
+    }
+
     pub(crate) fn perform_action(
         el: &AXElement,
         request: &ActionRequest,
@@ -326,4 +376,4 @@ mod imp {
 pub(crate) use imp::perform_action;
 
 #[cfg(target_os = "macos")]
-pub(crate) use imp::{ax_press_or_fail, click_via_bounds};
+pub(crate) use imp::{ax_press_or_fail, click_via_bounds, click_via_bounds_to_pid};

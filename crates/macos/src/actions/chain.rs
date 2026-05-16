@@ -48,6 +48,18 @@ mod imp {
         for (i, step) in def.steps.iter().enumerate() {
             if Instant::now() > deadline {
                 tracing::debug!("chain: timeout after {i}/{total} steps, trying CGClick fallback");
+                if headless_pid_click_permitted(policy) {
+                    if let Some(cg) = def
+                        .steps
+                        .iter()
+                        .find(|s| matches!(s, ChainStep::CGClickToPid { .. }))
+                    {
+                        if execute_step(el, caps, cg, ctx, policy)? {
+                            tracing::debug!("chain: CGClickToPid fallback succeeded");
+                            return Ok(());
+                        }
+                    }
+                }
                 if let Some(cg) = def
                     .steps
                     .iter()
@@ -68,10 +80,22 @@ mod imp {
                 );
             }
             if matches!(step, ChainStep::CGClick { .. }) && !physical_click_permitted(policy) {
+                if def
+                    .steps
+                    .iter()
+                    .any(|s| matches!(s, ChainStep::CGClickToPid { .. }))
+                {
+                    continue;
+                }
                 return Err(AdapterError::policy_denied_for_policy(
                     "Physical click fallback is disabled by the current interaction policy",
                     policy,
                 ));
+            }
+            if matches!(step, ChainStep::CGClickToPid { .. })
+                && !headless_pid_click_permitted(policy)
+            {
+                continue;
             }
             let label = step_label(step);
             if execute_step(el, caps, step, &ctx, policy)? {
@@ -103,6 +127,7 @@ mod imp {
             ChainStep::Custom { label, .. } => label,
             ChainStep::CustomWithDeadline { label, .. } => label,
             ChainStep::CGClick { .. } => "CGClick",
+            ChainStep::CGClickToPid { .. } => "CGClickToPid",
         }
     }
 
@@ -209,6 +234,19 @@ mod imp {
                         .is_ok(),
                 )
             }
+
+            ChainStep::CGClickToPid { button, count } => {
+                if !headless_pid_click_permitted(policy) {
+                    return Ok(false);
+                }
+                Ok(crate::actions::dispatch::click_via_bounds_to_pid(
+                    el,
+                    button.clone(),
+                    *count,
+                    policy,
+                )
+                .is_ok())
+            }
         }
     }
 
@@ -224,6 +262,10 @@ mod imp {
 
     fn physical_click_permitted(policy: InteractionPolicy) -> bool {
         policy.allow_focus_steal && policy.allow_cursor_move
+    }
+
+    fn headless_pid_click_permitted(policy: InteractionPolicy) -> bool {
+        !policy.allow_focus_steal && !policy.allow_cursor_move
     }
 
     fn set_dynamic_verified(el: &AXElement, attr: &str, value: &str) -> Result<bool, AdapterError> {
