@@ -32,6 +32,31 @@ mod imp {
         }
     }
 
+    pub fn synthesize_mouse_to_pid(event: MouseEvent, pid: i32) -> Result<(), AdapterError> {
+        tracing::debug!(
+            "mouse-to-pid: pid={} {:?} {:?} at ({:.0}, {:.0})",
+            pid,
+            event.kind,
+            event.button,
+            event.point.x,
+            event.point.y
+        );
+        let point = CGPoint::new(event.point.x, event.point.y);
+        let cg_button = to_cg_button(&event.button);
+        match event.kind {
+            MouseEventKind::Move => {
+                post_event_to_pid(CGEventType::MouseMoved, point, cg_button, pid)
+            }
+            MouseEventKind::Down => {
+                post_event_to_pid(down_type(&event.button), point, cg_button, pid)
+            }
+            MouseEventKind::Up => post_event_to_pid(up_type(&event.button), point, cg_button, pid),
+            MouseEventKind::Click { count } => {
+                synthesize_click_to_pid(point, cg_button, &event.button, count, pid)
+            }
+        }
+    }
+
     pub fn synthesize_drag(params: DragParams) -> Result<(), AdapterError> {
         drag_sequence(params).map_err(|err| {
             if err.suggestion.is_some() {
@@ -179,6 +204,42 @@ mod imp {
         Ok(())
     }
 
+    pub fn synthesize_drag_to_pid(params: DragParams, pid: i32) -> Result<(), AdapterError> {
+        tracing::debug!(
+            "mouse-to-pid: drag pid={} ({:.0},{:.0}) -> ({:.0},{:.0}) duration={}ms",
+            pid,
+            params.from.x,
+            params.from.y,
+            params.to.x,
+            params.to.y,
+            params.duration_ms.unwrap_or(300)
+        );
+        let from = CGPoint::new(params.from.x, params.from.y);
+        let to = CGPoint::new(params.to.x, params.to.y);
+        let duration_ms = params.duration_ms.unwrap_or(300);
+        let steps = (duration_ms / 16).max(4) as usize;
+        let step_delay = std::time::Duration::from_millis(duration_ms / steps as u64);
+
+        post_event_to_pid(CGEventType::LeftMouseDown, from, CGMouseButton::Left, pid)?;
+        std::thread::sleep(std::time::Duration::from_millis(200));
+
+        for i in 1..=steps {
+            let t = i as f64 / steps as f64;
+            let x = params.from.x + (params.to.x - params.from.x) * t;
+            let y = params.from.y + (params.to.y - params.from.y) * t;
+            post_event_to_pid(
+                CGEventType::LeftMouseDragged,
+                CGPoint::new(x, y),
+                CGMouseButton::Left,
+                pid,
+            )?;
+            std::thread::sleep(step_delay);
+        }
+
+        std::thread::sleep(std::time::Duration::from_millis(500));
+        post_event_to_pid(CGEventType::LeftMouseUp, to, CGMouseButton::Left, pid)
+    }
+
     fn synthesize_click(
         point: CGPoint,
         cg_button: CGMouseButton,
@@ -204,6 +265,16 @@ mod imp {
 
     fn set_click_count(event: &CGEvent, count: i64) {
         event.set_integer_value_field(EventField::MOUSE_EVENT_CLICK_STATE, count);
+    }
+
+    fn post_to_pid(event: &CGEvent, pid: i32) {
+        unsafe {
+            CGEventPostToPid(pid, event as *const CGEvent as *const std::ffi::c_void);
+        }
+    }
+
+    unsafe extern "C" {
+        fn CGEventPostToPid(pid: i32, event: *const std::ffi::c_void);
     }
 
     fn create_event(
@@ -248,6 +319,41 @@ mod imp {
     ) -> Result<(), AdapterError> {
         let ev = create_event_with_source(source, event_type, point, button)?;
         ev.post(CGEventTapLocation::HID);
+        Ok(())
+    }
+
+    fn post_event_to_pid(
+        event_type: CGEventType,
+        point: CGPoint,
+        button: CGMouseButton,
+        pid: i32,
+    ) -> Result<(), AdapterError> {
+        let ev = create_event(event_type, point, button)?;
+        post_to_pid(&ev, pid);
+        Ok(())
+    }
+
+    fn synthesize_click_to_pid(
+        point: CGPoint,
+        cg_button: CGMouseButton,
+        button: &MouseButton,
+        count: u32,
+        pid: i32,
+    ) -> Result<(), AdapterError> {
+        let down_ty = down_type(button);
+        let up_ty = up_type(button);
+        for i in 1..=count {
+            let down = create_event(down_ty, point, cg_button)?;
+            let up = create_event(up_ty, point, cg_button)?;
+            set_click_count(&down, i as i64);
+            set_click_count(&up, i as i64);
+            post_to_pid(&down, pid);
+            std::thread::sleep(std::time::Duration::from_millis(10));
+            post_to_pid(&up, pid);
+            if i < count {
+                std::thread::sleep(std::time::Duration::from_millis(30));
+            }
+        }
         Ok(())
     }
 
@@ -314,8 +420,16 @@ mod imp {
         Err(AdapterError::not_supported("mouse_event"))
     }
 
+    pub fn synthesize_mouse_to_pid(_event: MouseEvent, _pid: i32) -> Result<(), AdapterError> {
+        Err(AdapterError::not_supported("mouse_event_to_pid"))
+    }
+
     pub fn synthesize_drag(_params: DragParams) -> Result<(), AdapterError> {
         Err(AdapterError::not_supported("drag"))
+    }
+
+    pub fn synthesize_drag_to_pid(_params: DragParams, _pid: i32) -> Result<(), AdapterError> {
+        Err(AdapterError::not_supported("drag_to_pid"))
     }
 
     pub fn synthesize_scroll_at(_x: f64, _y: f64, _dy: i32, _dx: i32) -> Result<(), AdapterError> {
@@ -323,4 +437,29 @@ mod imp {
     }
 }
 
-pub use imp::{synthesize_drag, synthesize_mouse, synthesize_scroll_at};
+pub use imp::{
+    synthesize_drag, synthesize_drag_to_pid, synthesize_mouse, synthesize_mouse_to_pid,
+    synthesize_scroll_at,
+};
+
+#[cfg(all(test, target_os = "macos"))]
+mod tests {
+    use super::*;
+    use agent_desktop_core::action::{MouseButton, MouseEvent, MouseEventKind, Point};
+
+    #[test]
+    fn synthesize_mouse_to_pid_self_pid_smoke() {
+        let pid = std::process::id() as i32;
+        let event = MouseEvent {
+            kind: MouseEventKind::Move,
+            button: MouseButton::Left,
+            point: Point { x: 0.0, y: 0.0 },
+        };
+        let _ = synthesize_mouse_to_pid(event, pid);
+    }
+
+    #[test]
+    fn synthesize_drag_to_pid_symbol_referenced() {
+        let _ = synthesize_drag_to_pid as fn(DragParams, i32) -> Result<(), AdapterError>;
+    }
+}
