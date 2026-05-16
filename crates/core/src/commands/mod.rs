@@ -69,3 +69,6 @@ pub(crate) mod wait_timeout;
 
 #[cfg(test)]
 mod ref_policy_tests;
+
+#[cfg(test)]
+mod target_pid_tests;

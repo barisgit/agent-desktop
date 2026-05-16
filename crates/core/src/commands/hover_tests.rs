@@ -43,7 +43,7 @@ impl PlatformAdapter for HoverCaptureAdapter {
         Ok(())
     }
 
-    fn mouse_event(&self, event: MouseEvent) -> Result<(), AdapterError> {
+    fn mouse_event(&self, event: MouseEvent, _target_pid: Option<i32>) -> Result<(), AdapterError> {
         *self.moved_to.lock().unwrap() = Some(event);
         Ok(())
     }
@@ -79,6 +79,9 @@ fn ref_args(snapshot_id: String) -> HoverArgs {
         snapshot_id: Some(snapshot_id),
         xy: None,
         duration_ms: None,
+        policy: InteractionPolicy::headed(),
+        target_pid: None,
+        target_app: None,
     }
 }
 
@@ -124,6 +127,9 @@ fn headed_xy_hover_never_steals_focus() {
             snapshot_id: None,
             xy: Some((5.0, 6.0)),
             duration_ms: None,
+            policy: InteractionPolicy::headed(),
+            target_pid: None,
+            target_app: None,
         },
         &adapter,
         &CommandContext::default().with_headed(true),

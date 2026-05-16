@@ -361,7 +361,40 @@ mod imp {
 
     #[cfg(test)]
     mod tests {
-        use super::finite_target;
+        use super::{finite_target, headless_pid_click_permitted, physical_click_permitted};
+        use agent_desktop_core::InteractionPolicy;
+
+        #[test]
+        fn headless_pid_permitted_only_under_headless_policy() {
+            assert!(headless_pid_click_permitted(InteractionPolicy::headless()));
+            assert!(!headless_pid_click_permitted(
+                InteractionPolicy::focus_fallback()
+            ));
+            assert!(!headless_pid_click_permitted(InteractionPolicy::headed()));
+        }
+
+        #[test]
+        fn physical_click_permitted_only_under_headed_policy() {
+            assert!(physical_click_permitted(InteractionPolicy::headed()));
+            assert!(!physical_click_permitted(
+                InteractionPolicy::focus_fallback()
+            ));
+            assert!(!physical_click_permitted(InteractionPolicy::headless()));
+        }
+
+        #[test]
+        fn physical_and_headless_predicates_are_mutually_exclusive() {
+            for policy in [
+                InteractionPolicy::headed(),
+                InteractionPolicy::focus_fallback(),
+                InteractionPolicy::headless(),
+            ] {
+                assert!(
+                    !(physical_click_permitted(policy) && headless_pid_click_permitted(policy)),
+                    "policy {policy:?} permits both physical and headless paths"
+                );
+            }
+        }
 
         #[test]
         fn finite_target_rejects_non_finite_numbers() {

@@ -44,7 +44,7 @@ impl PlatformAdapter for DragCaptureAdapter {
         Ok(())
     }
 
-    fn drag(&self, params: DragParams) -> Result<(), AdapterError> {
+    fn drag(&self, params: DragParams, _target_pid: Option<i32>) -> Result<(), AdapterError> {
         *self.captured.lock().unwrap() = Some(params);
         Ok(())
     }
@@ -59,6 +59,9 @@ fn xy_args(drop_delay_ms: Option<u64>) -> DragArgs {
         snapshot_id: None,
         duration_ms: None,
         drop_delay_ms,
+        policy: InteractionPolicy::headed(),
+        target_pid: None,
+        target_app: None,
     }
 }
 
@@ -135,6 +138,9 @@ fn cross_app_args(snapshot_id: String) -> DragArgs {
         snapshot_id: Some(snapshot_id),
         duration_ms: None,
         drop_delay_ms: None,
+        policy: InteractionPolicy::headed(),
+        target_pid: None,
+        target_app: None,
     }
 }
 
@@ -155,6 +161,9 @@ fn drag_resolves_ref_bounds_to_center_point() {
         snapshot_id: Some(snapshot_id),
         duration_ms: None,
         drop_delay_ms: Some(300),
+        policy: InteractionPolicy::headed(),
+        target_pid: None,
+        target_app: None,
     };
     execute(args, &adapter, &CommandContext::default().with_headed(true)).unwrap();
 
