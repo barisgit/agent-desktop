@@ -68,6 +68,10 @@ For raw coordinate commands (`mouse-click`, `mouse-down`, `mouse-up`,
 - Electron apps may collapse their AX tree while backgrounded. Discovery
   (snapshot/find) may need brief focus to populate the tree; the click itself
   does not.
+- Enter-submit via `press --app <name> return` is app-specific. Some web and
+  Electron apps accept the keystroke but do not fire the in-page Enter handler,
+  so the field stays focused without submitting. Prefer clicking the submit
+  control directly when Enter-submit cannot be confirmed.
 
 ## Review Rule
 

@@ -248,6 +248,7 @@ Limitations:
 - Sandboxed apps with hardened runtime (Mail, Notes, App Store, most Mac App Store apps) may silently discard `CGEventPostToPid` events. Fall back to `--policy focus-fallback` or `--policy physical`.
 - Drag under `--policy headless` is best-effort. Drag-and-drop flows that depend on a real cursor (especially cross-app DnD) may not complete.
 - Headless mouse delivery does not enable headless text input. `type` and `set-value` rely on focused-keyboard chain steps that are gated by the policy and will fail under headless without focus. Use `--policy focus-fallback` or `--policy physical` for keyboard-driven flows.
+- `press --app <name> return` (and other Enter-submit flows) is app-specific. In some web/Electron apps the keystroke is delivered but the in-page Enter handler does not fire reliably; the field stays focused without submitting. If Enter-submit is required, click the submit control directly instead of relying on the Return key.
 - Electron apps may collapse their accessibility tree when unfocused. Discovery via `snapshot`/`find` may need brief focus; the click itself does not.
 - `--target-app` matches running GUI apps case-insensitively. Zero matches return `APP_NOT_FOUND`; multiple matches return `INVALID_ARGS` with the candidate pids — disambiguate with `--target-pid <pid>`.
 
