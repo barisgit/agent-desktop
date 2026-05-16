@@ -245,8 +245,11 @@ impl PlatformAdapter for MacOSAdapter {
         crate::system::window_ops::execute(win, op)
     }
 
-    fn mouse_event(&self, event: MouseEvent) -> Result<(), AdapterError> {
-        crate::input::mouse::synthesize_mouse(event)
+    fn mouse_event(&self, event: MouseEvent, target_pid: Option<i32>) -> Result<(), AdapterError> {
+        match target_pid {
+            Some(pid) => crate::input::mouse::synthesize_mouse_to_pid(event, pid),
+            None => crate::input::mouse::synthesize_mouse(event),
+        }
     }
 
     fn key_event(
@@ -257,8 +260,11 @@ impl PlatformAdapter for MacOSAdapter {
         crate::input::keyboard::synthesize_key_state(combo, down)
     }
 
-    fn drag(&self, params: DragParams) -> Result<(), AdapterError> {
-        crate::input::mouse::synthesize_drag(params)
+    fn drag(&self, params: DragParams, target_pid: Option<i32>) -> Result<(), AdapterError> {
+        match target_pid {
+            Some(pid) => crate::input::mouse::synthesize_drag_to_pid(params, pid),
+            None => crate::input::mouse::synthesize_drag(params),
+        }
     }
 
     fn clear_clipboard(&self) -> Result<(), AdapterError> {

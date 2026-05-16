@@ -54,9 +54,10 @@ mod imp {
                         .iter()
                         .find(|s| matches!(s, ChainStep::CGClickToPid { .. }))
                     {
-                        if execute_step(el, caps, cg, ctx, policy)? {
+                        if execute_step(el, caps, cg, &ctx, policy)? {
                             tracing::debug!("chain: CGClickToPid fallback succeeded");
-                            return Ok(());
+                            steps.push(ActionStep::succeeded(step_label(cg)));
+                            return Ok(steps);
                         }
                     }
                 }

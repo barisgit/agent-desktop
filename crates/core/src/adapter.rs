@@ -329,7 +329,15 @@ pub trait PlatformAdapter: Send + Sync {
         Err(AdapterError::not_supported("window_op"))
     }
 
-    fn mouse_event(&self, _event: MouseEvent) -> Result<(), AdapterError> {
+    /// Synthesizes a raw mouse event. When `target_pid` is `Some`, the
+    /// platform adapter must route the event to that process only and
+    /// must not move the system cursor. When `None`, the event is
+    /// broadcast through the normal HID/session event tap.
+    fn mouse_event(
+        &self,
+        _event: MouseEvent,
+        _target_pid: Option<i32>,
+    ) -> Result<(), AdapterError> {
         Err(AdapterError::not_supported("mouse_event"))
     }
 
@@ -337,7 +345,10 @@ pub trait PlatformAdapter: Send + Sync {
         Err(AdapterError::not_supported("key_event"))
     }
 
-    fn drag(&self, _params: DragParams) -> Result<(), AdapterError> {
+    /// Synthesizes a mouse drag. `target_pid` follows the same contract
+    /// as `mouse_event`: `Some(pid)` routes events to that process only,
+    /// `None` broadcasts.
+    fn drag(&self, _params: DragParams, _target_pid: Option<i32>) -> Result<(), AdapterError> {
         Err(AdapterError::not_supported("drag"))
     }
 

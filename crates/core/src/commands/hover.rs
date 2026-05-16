@@ -1,12 +1,16 @@
 use crate::{
     action::{MouseButton, MouseEvent, MouseEventKind},
     adapter::PlatformAdapter,
-    commands::point_resolve::{
-        PointResolveArgs, focus_for_physical_input, require_cursor_policy,
-        resolve_point_from_ref_or_xy_with_context,
+    commands::{
+        helpers::resolve_raw_mouse_target_pid,
+        point_resolve::{
+            PointResolveArgs, focus_for_physical_input, require_cursor_policy,
+            resolve_point_from_ref_or_xy_with_context,
+        },
     },
     context::CommandContext,
     error::AppError,
+    interaction_policy::InteractionPolicy,
 };
 use serde_json::{Value, json};
 
@@ -15,6 +19,9 @@ pub struct HoverArgs {
     pub snapshot_id: Option<String>,
     pub xy: Option<(f64, f64)>,
     pub duration_ms: Option<u64>,
+    pub policy: InteractionPolicy,
+    pub target_pid: Option<i32>,
+    pub target_app: Option<String>,
 }
 
 pub fn execute(
@@ -22,7 +29,6 @@ pub fn execute(
     adapter: &dyn PlatformAdapter,
     context: &CommandContext,
 ) -> Result<Value, AppError> {
-    require_cursor_policy(context, "hover")?;
     let resolved = resolve_point_from_ref_or_xy_with_context(
         PointResolveArgs {
             ref_id: args.ref_id.as_deref(),
@@ -33,12 +39,26 @@ pub fn execute(
         adapter,
         context,
     )?;
-    let focused = focus_for_physical_input(resolved.pid, adapter, context)?;
-    adapter.mouse_event(MouseEvent {
-        kind: MouseEventKind::Move,
-        point: resolved.point.clone(),
-        button: MouseButton::Left,
-    })?;
+    let target_pid = resolve_raw_mouse_target_pid(
+        args.target_pid,
+        args.target_app.as_deref(),
+        args.policy,
+        adapter,
+    )?;
+    let focused = if target_pid.is_none() {
+        require_cursor_policy(context, "hover")?;
+        focus_for_physical_input(resolved.pid, adapter, context)?
+    } else {
+        false
+    };
+    adapter.mouse_event(
+        MouseEvent {
+            kind: MouseEventKind::Move,
+            point: resolved.point.clone(),
+            button: MouseButton::Left,
+        },
+        target_pid,
+    )?;
     if let Some(ms) = args.duration_ms {
         std::thread::sleep(std::time::Duration::from_millis(ms));
     }

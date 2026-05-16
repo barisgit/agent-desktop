@@ -1,4 +1,4 @@
-use clap::Parser;
+use clap::{Parser, ValueEnum};
 use serde::Deserialize;
 
 fn default_scroll_amount() -> u32 {
@@ -15,6 +15,26 @@ fn default_mouse_click_count() -> u32 {
 
 fn default_scroll_direction() -> String {
     "down".to_string()
+}
+
+#[derive(ValueEnum, Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) enum InteractionPolicyArg {
+    #[default]
+    Physical,
+    FocusFallback,
+    Headless,
+}
+
+impl InteractionPolicyArg {
+    pub(crate) fn to_core(self) -> agent_desktop_core::InteractionPolicy {
+        use agent_desktop_core::InteractionPolicy;
+        match self {
+            Self::Physical => InteractionPolicy::headed(),
+            Self::FocusFallback => InteractionPolicy::focus_fallback(),
+            Self::Headless => InteractionPolicy::headless(),
+        }
+    }
 }
 
 #[derive(Parser, Debug, Deserialize)]
@@ -141,6 +161,28 @@ pub(crate) struct HoverArgs {
     pub xy: Option<String>,
     #[arg(long, help = "Hold hover position for N milliseconds")]
     pub duration: Option<u64>,
+    #[arg(
+        long,
+        value_enum,
+        default_value_t = InteractionPolicyArg::Physical,
+        help = "Interaction policy: physical (default), focus-fallback, headless"
+    )]
+    #[serde(default)]
+    pub policy: InteractionPolicyArg,
+    #[arg(
+        long = "target-app",
+        help = "Target application name for headless event routing",
+        conflicts_with = "target_pid"
+    )]
+    #[serde(default, rename = "target-app", alias = "target_app")]
+    pub target_app: Option<String>,
+    #[arg(
+        long = "target-pid",
+        help = "Target application PID for headless event routing",
+        conflicts_with = "target_app"
+    )]
+    #[serde(default, rename = "target-pid", alias = "target_pid")]
+    pub target_pid: Option<i32>,
 }
 
 #[derive(Parser, Debug, Deserialize)]
@@ -176,6 +218,28 @@ pub(crate) struct DragCliArgs {
         help = "Hold over the destination this many ms before releasing, so the drop target activates (macOS); default 500"
     )]
     pub drop_delay: Option<u64>,
+    #[arg(
+        long,
+        value_enum,
+        default_value_t = InteractionPolicyArg::Physical,
+        help = "Interaction policy: physical (default), focus-fallback, headless"
+    )]
+    #[serde(default)]
+    pub policy: InteractionPolicyArg,
+    #[arg(
+        long = "target-app",
+        help = "Target application name for headless event routing",
+        conflicts_with = "target_pid"
+    )]
+    #[serde(default, rename = "target-app", alias = "target_app")]
+    pub target_app: Option<String>,
+    #[arg(
+        long = "target-pid",
+        help = "Target application PID for headless event routing",
+        conflicts_with = "target_app"
+    )]
+    #[serde(default, rename = "target-pid", alias = "target_pid")]
+    pub target_pid: Option<i32>,
 }
 
 #[derive(Parser, Debug, Deserialize)]
@@ -183,6 +247,28 @@ pub(crate) struct DragCliArgs {
 pub(crate) struct MouseMoveArgs {
     #[arg(long, help = "Absolute coordinates as x,y; requires --headed")]
     pub xy: String,
+    #[arg(
+        long,
+        value_enum,
+        default_value_t = InteractionPolicyArg::Physical,
+        help = "Interaction policy: physical (default), focus-fallback, headless"
+    )]
+    #[serde(default)]
+    pub policy: InteractionPolicyArg,
+    #[arg(
+        long = "target-app",
+        help = "Target application name for headless event routing",
+        conflicts_with = "target_pid"
+    )]
+    #[serde(default, rename = "target-app", alias = "target_app")]
+    pub target_app: Option<String>,
+    #[arg(
+        long = "target-pid",
+        help = "Target application PID for headless event routing",
+        conflicts_with = "target_app"
+    )]
+    #[serde(default, rename = "target-pid", alias = "target_pid")]
+    pub target_pid: Option<i32>,
 }
 
 #[derive(Parser, Debug, Deserialize)]
@@ -200,6 +286,28 @@ pub(crate) struct MouseClickArgs {
     #[arg(long, default_value = "1", help = "Number of clicks")]
     #[serde(default = "default_mouse_click_count")]
     pub count: u32,
+    #[arg(
+        long,
+        value_enum,
+        default_value_t = InteractionPolicyArg::Physical,
+        help = "Interaction policy: physical (default), focus-fallback, headless"
+    )]
+    #[serde(default)]
+    pub policy: InteractionPolicyArg,
+    #[arg(
+        long = "target-app",
+        help = "Target application name for headless event routing",
+        conflicts_with = "target_pid"
+    )]
+    #[serde(default, rename = "target-app", alias = "target_app")]
+    pub target_app: Option<String>,
+    #[arg(
+        long = "target-pid",
+        help = "Target application PID for headless event routing",
+        conflicts_with = "target_app"
+    )]
+    #[serde(default, rename = "target-pid", alias = "target_pid")]
+    pub target_pid: Option<i32>,
 }
 
 #[derive(Parser, Debug, Deserialize)]
@@ -214,4 +322,26 @@ pub(crate) struct MousePointArgs {
     )]
     #[serde(default = "default_mouse_button")]
     pub button: String,
+    #[arg(
+        long,
+        value_enum,
+        default_value_t = InteractionPolicyArg::Physical,
+        help = "Interaction policy: physical (default), focus-fallback, headless"
+    )]
+    #[serde(default)]
+    pub policy: InteractionPolicyArg,
+    #[arg(
+        long = "target-app",
+        help = "Target application name for headless event routing",
+        conflicts_with = "target_pid"
+    )]
+    #[serde(default, rename = "target-app", alias = "target_app")]
+    pub target_app: Option<String>,
+    #[arg(
+        long = "target-pid",
+        help = "Target application PID for headless event routing",
+        conflicts_with = "target_app"
+    )]
+    #[serde(default, rename = "target-pid", alias = "target_pid")]
+    pub target_pid: Option<i32>,
 }

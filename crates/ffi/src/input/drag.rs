@@ -25,7 +25,7 @@ pub unsafe extern "C" fn ad_drag(
         let adapter = &*adapter;
         let p = &*params;
         let core_params = p.to_core();
-        match adapter.inner.drag(core_params) {
+        match adapter.inner.drag(core_params, None) {
             Ok(()) => AdResult::Ok,
             Err(e) => {
                 error::set_last_error(&e);

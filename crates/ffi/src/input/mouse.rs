@@ -74,7 +74,7 @@ pub unsafe extern "C" fn ad_mouse_event(
             point,
             button,
         };
-        match adapter.inner.mouse_event(core_event) {
+        match adapter.inner.mouse_event(core_event, None) {
             Ok(()) => AdResult::Ok,
             Err(e) => {
                 error::set_last_error(&e);

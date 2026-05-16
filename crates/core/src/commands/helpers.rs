@@ -6,6 +6,7 @@ use crate::{
     commands::{wait_selector, wait_selector::WaitSelectorInput},
     context::CommandContext,
     error::AppError,
+    interaction_policy::InteractionPolicy,
     node::WindowInfo,
     refs::{RefEntry, validate_ref_id},
     refs_store::RefStore,
@@ -13,6 +14,70 @@ use crate::{
     window_lookup,
 };
 use serde_json::{Value, json};
+
+/// Resolves the target pid for a raw mouse / drag command using the
+/// explicit `--target-pid` and `--target-app` flags, considering the
+/// requested `InteractionPolicy`.
+///
+/// - `target_pid` wins when set.
+/// - Otherwise looks up `target_app` case-insensitively via
+///   `list_apps`. Exactly one match returns `Some(pid)`. Zero matches
+///   returns `APP_NOT_FOUND`. Multiple matches return `INVALID_ARGS`
+///   with the candidate pids in `platform_detail`.
+/// - When neither flag is set the function returns `Ok(None)` under
+///   physical / focus-fallback policies (broadcast HID retains the
+///   existing behavior). Under `headless()` it returns `INVALID_ARGS`
+///   pointing at `--target-app` / `--target-pid` because broadcasting
+///   would defeat the policy.
+pub fn resolve_raw_mouse_target_pid(
+    target_pid: Option<i32>,
+    target_app: Option<&str>,
+    policy: InteractionPolicy,
+    adapter: &dyn PlatformAdapter,
+) -> Result<Option<i32>, AppError> {
+    if let Some(pid) = target_pid {
+        return Ok(Some(pid));
+    }
+    if let Some(name) = target_app {
+        let apps = adapter.list_apps()?;
+        let matches: Vec<_> = apps
+            .into_iter()
+            .filter(|a| a.name.eq_ignore_ascii_case(name))
+            .collect();
+        return match matches.len() {
+            0 => Err(AppError::Adapter(
+                crate::error::AdapterError::new(
+                    crate::error::ErrorCode::AppNotFound,
+                    format!("App '{name}' not found"),
+                )
+                .with_suggestion("Run 'list-apps' to see running applications"),
+            )),
+            1 => Ok(Some(matches[0].pid)),
+            _ => {
+                let pids = matches
+                    .iter()
+                    .map(|a| format!("{}#{}", a.name, a.pid))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                Err(AppError::Adapter(
+                    crate::error::AdapterError::new(
+                        crate::error::ErrorCode::InvalidArgs,
+                        format!("App name '{name}' matches multiple processes; use --target-pid"),
+                    )
+                    .with_platform_detail(pids)
+                    .with_suggestion("Pass --target-pid <pid> to disambiguate"),
+                ))
+            }
+        };
+    }
+    if policy == InteractionPolicy::headless() {
+        return Err(AppError::invalid_input_with_suggestion(
+            "Headless mouse commands require --target-app or --target-pid",
+            "Pass --target-app <name> or --target-pid <pid>, or use --policy physical",
+        ));
+    }
+    Ok(None)
+}
 
 pub struct AppArgs {
     pub app: Option<String>,

@@ -197,6 +197,9 @@ fn dispatch_inner(
                 snapshot_id: a.snapshot,
                 xy: parse_xy_opt(a.xy.as_deref())?,
                 duration_ms: a.duration,
+                policy: a.policy.to_core(),
+                target_pid: a.target_pid,
+                target_app: a.target_app,
             },
             adapter,
             context,
@@ -211,6 +214,9 @@ fn dispatch_inner(
                 snapshot_id: a.snapshot,
                 duration_ms: a.duration,
                 drop_delay_ms: a.drop_delay,
+                policy: a.policy.to_core(),
+                target_pid: a.target_pid,
+                target_app: a.target_app,
             },
             adapter,
             context,
@@ -218,7 +224,17 @@ fn dispatch_inner(
 
         Commands::MouseMove(a) => {
             let (x, y) = parse_xy(&a.xy)?;
-            mouse_move::execute(mouse_move::MouseMoveArgs { x, y }, adapter, context)
+            mouse_move::execute(
+                mouse_move::MouseMoveArgs {
+                    x,
+                    y,
+                    policy: a.policy.to_core(),
+                    target_pid: a.target_pid,
+                    target_app: a.target_app,
+                },
+                adapter,
+                context,
+            )
         }
 
         Commands::MouseClick(a) => {
@@ -229,6 +245,9 @@ fn dispatch_inner(
                     y,
                     button: parse_mouse_button(&a.button)?,
                     count: a.count,
+                    policy: a.policy.to_core(),
+                    target_pid: a.target_pid,
+                    target_app: a.target_app,
                 },
                 adapter,
                 context,
@@ -242,6 +261,9 @@ fn dispatch_inner(
                     x,
                     y,
                     button: parse_mouse_button(&a.button)?,
+                    policy: a.policy.to_core(),
+                    target_pid: a.target_pid,
+                    target_app: a.target_app,
                 },
                 adapter,
                 context,
@@ -255,6 +277,9 @@ fn dispatch_inner(
                     x,
                     y,
                     button: parse_mouse_button(&a.button)?,
+                    policy: a.policy.to_core(),
+                    target_pid: a.target_pid,
+                    target_app: a.target_app,
                 },
                 adapter,
                 context,

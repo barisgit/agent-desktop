@@ -1,12 +1,16 @@
 use crate::{
     action::DragParams,
     adapter::PlatformAdapter,
-    commands::point_resolve::{
-        PointResolveArgs, focus_for_physical_input, require_cursor_policy,
-        resolve_point_from_ref_or_xy_with_context,
+    commands::{
+        helpers::resolve_raw_mouse_target_pid,
+        point_resolve::{
+            PointResolveArgs, focus_for_physical_input, require_cursor_policy,
+            resolve_point_from_ref_or_xy_with_context,
+        },
     },
     context::CommandContext,
     error::AppError,
+    interaction_policy::InteractionPolicy,
 };
 use serde_json::{Value, json};
 
@@ -18,6 +22,9 @@ pub struct DragArgs {
     pub snapshot_id: Option<String>,
     pub duration_ms: Option<u64>,
     pub drop_delay_ms: Option<u64>,
+    pub policy: InteractionPolicy,
+    pub target_pid: Option<i32>,
+    pub target_app: Option<String>,
 }
 
 pub fn execute(
@@ -25,7 +32,6 @@ pub fn execute(
     adapter: &dyn PlatformAdapter,
     context: &CommandContext,
 ) -> Result<Value, AppError> {
-    require_cursor_policy(context, "drag")?;
     let from = resolve_point_from_ref_or_xy_with_context(
         PointResolveArgs {
             ref_id: args.from_ref.as_deref(),
@@ -46,14 +52,25 @@ pub fn execute(
         adapter,
         context,
     )?;
-    let focused = focus_for_physical_input(from.pid, adapter, context)?;
+    let target_pid = resolve_raw_mouse_target_pid(
+        args.target_pid,
+        args.target_app.as_deref(),
+        args.policy,
+        adapter,
+    )?;
+    let focused = if target_pid.is_none() {
+        require_cursor_policy(context, "drag")?;
+        focus_for_physical_input(from.pid, adapter, context)?
+    } else {
+        false
+    };
     let params = DragParams {
         from: from.point.clone(),
         to: to.point.clone(),
         duration_ms: args.duration_ms,
         drop_delay_ms: args.drop_delay_ms,
     };
-    adapter.drag(params)?;
+    adapter.drag(params, target_pid)?;
     let mut response = json!({
         "dragged": true,
         "from": { "x": from.point.x, "y": from.point.y },
