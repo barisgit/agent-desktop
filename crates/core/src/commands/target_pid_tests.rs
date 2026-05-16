@@ -1,7 +1,10 @@
 use crate::{
     action::{MouseButton, MouseEvent, MouseEventKind},
     adapter::PlatformAdapter,
-    commands::{helpers::resolve_raw_mouse_target_pid, mouse_click},
+    commands::{
+        helpers::{resolve_raw_mouse_target_pid, resolve_raw_mouse_target_pid_with_ref},
+        mouse_click,
+    },
     context::CommandContext,
     error::{AdapterError, AppError, ErrorCode},
     interaction_policy::InteractionPolicy,
@@ -190,6 +193,79 @@ fn mouse_click_headless_with_target_pid_routes_to_adapter() {
     .unwrap();
     let (_event, target_pid) = adapter.last_event.lock().unwrap().clone().unwrap();
     assert_eq!(target_pid, Some(7777));
+}
+
+#[test]
+fn resolve_with_ref_uses_ref_pid_under_headless_when_no_target() {
+    let adapter = AppsAdapter::new(vec![]);
+    let pid = resolve_raw_mouse_target_pid_with_ref(
+        None,
+        None,
+        Some(9090),
+        InteractionPolicy::headless(),
+        &adapter,
+    )
+    .unwrap();
+    assert_eq!(pid, Some(9090));
+}
+
+#[test]
+fn resolve_with_ref_explicit_target_pid_wins_over_ref_pid() {
+    let adapter = AppsAdapter::new(vec![]);
+    let pid = resolve_raw_mouse_target_pid_with_ref(
+        Some(1111),
+        None,
+        Some(9090),
+        InteractionPolicy::headless(),
+        &adapter,
+    )
+    .unwrap();
+    assert_eq!(pid, Some(1111));
+}
+
+#[test]
+fn resolve_with_ref_explicit_target_app_wins_over_ref_pid() {
+    let adapter = AppsAdapter::new(vec![app("Finder", 222)]);
+    let pid = resolve_raw_mouse_target_pid_with_ref(
+        None,
+        Some("Finder"),
+        Some(9090),
+        InteractionPolicy::headless(),
+        &adapter,
+    )
+    .unwrap();
+    assert_eq!(pid, Some(222));
+}
+
+#[test]
+fn resolve_with_ref_physical_ignores_ref_pid_and_returns_none() {
+    let adapter = AppsAdapter::new(vec![]);
+    let pid = resolve_raw_mouse_target_pid_with_ref(
+        None,
+        None,
+        Some(9090),
+        InteractionPolicy::headed(),
+        &adapter,
+    )
+    .unwrap();
+    assert_eq!(pid, None);
+}
+
+#[test]
+fn resolve_with_ref_headless_no_ref_pid_still_errors() {
+    let adapter = AppsAdapter::new(vec![]);
+    let err = resolve_raw_mouse_target_pid_with_ref(
+        None,
+        None,
+        None,
+        InteractionPolicy::headless(),
+        &adapter,
+    )
+    .unwrap_err();
+    match err {
+        AppError::Adapter(e) => assert_eq!(e.code, ErrorCode::InvalidArgs),
+        _ => panic!("expected adapter error"),
+    }
 }
 
 #[test]

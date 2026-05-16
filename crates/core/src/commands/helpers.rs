@@ -79,6 +79,27 @@ pub fn resolve_raw_mouse_target_pid(
     Ok(None)
 }
 
+/// Variant of [`resolve_raw_mouse_target_pid`] that uses a ref-derived pid as
+/// an implicit target under `--policy headless` when no explicit
+/// `--target-pid`/`--target-app` was provided. Explicit flags always win.
+/// Under `physical` and `focus_fallback` policies this behaves identically to
+/// [`resolve_raw_mouse_target_pid`] and ignores `ref_pid` so broadcast HID
+/// semantics are preserved.
+pub fn resolve_raw_mouse_target_pid_with_ref(
+    target_pid: Option<i32>,
+    target_app: Option<&str>,
+    ref_pid: Option<i32>,
+    policy: InteractionPolicy,
+    adapter: &dyn PlatformAdapter,
+) -> Result<Option<i32>, AppError> {
+    if target_pid.is_none() && target_app.is_none() && policy == InteractionPolicy::headless() {
+        if let Some(pid) = ref_pid {
+            return Ok(Some(pid));
+        }
+    }
+    resolve_raw_mouse_target_pid(target_pid, target_app, policy, adapter)
+}
+
 pub struct AppArgs {
     pub app: Option<String>,
 }

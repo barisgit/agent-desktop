@@ -2,7 +2,7 @@ use crate::{
     action::{MouseButton, MouseEvent, MouseEventKind},
     adapter::PlatformAdapter,
     commands::{
-        helpers::resolve_raw_mouse_target_pid,
+        helpers::resolve_raw_mouse_target_pid_with_ref,
         point_resolve::{
             PointResolveArgs, focus_for_physical_input, require_cursor_policy,
             resolve_point_from_ref_or_xy_with_context,
@@ -39,9 +39,10 @@ pub fn execute(
         adapter,
         context,
     )?;
-    let target_pid = resolve_raw_mouse_target_pid(
+    let target_pid = resolve_raw_mouse_target_pid_with_ref(
         args.target_pid,
         args.target_app.as_deref(),
+        resolved.pid,
         args.policy,
         adapter,
     )?;
