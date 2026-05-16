@@ -230,6 +230,27 @@ agent-desktop --headed mouse-down --xy 500,300    # press at coordinates
 agent-desktop --headed mouse-up --xy 500,300      # release at coordinates
 ```
 
+#### Headless click on a backgrounded target (macOS)
+
+Raw `mouse-*` and `hover`/`drag` commands accept a side-effect policy and a target process. Under `--policy headless`, events are delivered to a single process via `CGEventPostToPid` so the cursor does not move and focus does not change. The target process is identified by `--target-app` (case-insensitive app name) or `--target-pid` (numeric pid). The two flags are mutually exclusive. Default policy is `physical`, which preserves bit-identical behavior with previous releases.
+
+```bash
+agent-desktop mouse-click --xy 500,300 --policy headless --target-app "YT Music"
+agent-desktop mouse-click --xy 500,300 --policy headless --target-pid 4711
+agent-desktop hover --xy 500,300 --policy headless --target-app Finder
+agent-desktop drag --xy 100,200 --to-xy 400,200 --policy headless --target-app Finder
+```
+
+Ref actions (`click @e3`, `double-click @e3`, `right-click @e3`, `focus @e3`) resolve the owning process from the ref itself and pick the headless pid path automatically when the action policy is headless (the default for ref actions).
+
+Limitations:
+
+- Sandboxed apps with hardened runtime (Mail, Notes, App Store, most Mac App Store apps) may silently discard `CGEventPostToPid` events. Fall back to `--policy focus-fallback` or `--policy physical`.
+- Drag under `--policy headless` is best-effort. Drag-and-drop flows that depend on a real cursor (especially cross-app DnD) may not complete.
+- Headless mouse delivery does not enable headless text input. `type` and `set-value` rely on focused-keyboard chain steps that are gated by the policy and will fail under headless without focus. Use `--policy focus-fallback` or `--policy physical` for keyboard-driven flows.
+- Electron apps may collapse their accessibility tree when unfocused. Discovery via `snapshot`/`find` may need brief focus; the click itself does not.
+- `--target-app` matches running GUI apps case-insensitively. Zero matches return `APP_NOT_FOUND`; multiple matches return `INVALID_ARGS` with the candidate pids — disambiguate with `--target-pid <pid>`.
+
 ### App & Window Management
 
 ```bash
