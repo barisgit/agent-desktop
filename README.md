@@ -238,7 +238,7 @@ Raw `mouse-*` and `hover`/`drag` commands accept a side-effect policy and a targ
 agent-desktop mouse-click --xy 500,300 --policy headless --target-app "YT Music"
 agent-desktop mouse-click --xy 500,300 --policy headless --target-pid 4711
 agent-desktop hover --xy 500,300 --policy headless --target-app Finder
-agent-desktop drag --xy 100,200 --to-xy 400,200 --policy headless --target-app Finder
+agent-desktop drag --from-xy 100,200 --to-xy 400,200 --policy headless --target-app Finder
 ```
 
 Ref actions (`click @e3`, `double-click @e3`, `right-click @e3`, `focus @e3`) resolve the owning process from the ref itself and pick the headless pid path automatically when the action policy is headless (the default for ref actions).
@@ -247,7 +247,7 @@ Limitations:
 
 - Sandboxed apps with hardened runtime (Mail, Notes, App Store, most Mac App Store apps) may silently discard `CGEventPostToPid` events. Fall back to `--policy focus-fallback` or `--policy physical`.
 - Drag under `--policy headless` is best-effort. Drag-and-drop flows that depend on a real cursor (especially cross-app DnD) may not complete.
-- Headless mouse delivery does not enable headless text input. `type` and `set-value` rely on focused-keyboard chain steps that are gated by the policy and will fail under headless without focus. Use `--policy focus-fallback` or `--policy physical` for keyboard-driven flows.
+- Headless mouse delivery does not enable fully headless text input. `set-value` tries a direct AX write first and succeeds for many text fields; when the AX write is rejected the fallback chain steps are keyboard-based and need focus, so they are gated off under headless. `type` is keyboard-only and also requires focus today. Use `--policy focus-fallback` or `--policy physical` for keyboard-driven flows that the direct AX path cannot satisfy.
 - `press --app <name> return` (and other Enter-submit flows) is app-specific. In some web/Electron apps the keystroke is delivered but the in-page Enter handler does not fire reliably; the field stays focused without submitting. If Enter-submit is required, click the submit control directly instead of relying on the Return key.
 - Electron apps may collapse their accessibility tree when unfocused. Discovery via `snapshot`/`find` may need brief focus; the click itself does not.
 - `--target-app` matches running GUI apps case-insensitively. Zero matches return `APP_NOT_FOUND`; multiple matches return `INVALID_ARGS` with the candidate pids — disambiguate with `--target-pid <pid>`.

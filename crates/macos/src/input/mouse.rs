@@ -267,6 +267,14 @@ mod imp {
         event.set_integer_value_field(EventField::MOUSE_EVENT_CLICK_STATE, count);
     }
 
+    /// Posts a `CGEvent` to a single process via `CGEventPostToPid`.
+    ///
+    /// `core-graphics`' [`CGEvent`] is `#[repr(transparent)]` over a
+    /// `NonNull<sys::CGEvent>`, so casting `&CGEvent -> *const c_void`
+    /// yields the underlying `CGEventRef` that the C API expects. This
+    /// matches the pattern used by the existing `set_click_count` helper
+    /// and avoids an extra `foreign-types` dependency just to call
+    /// `event.as_ptr()`.
     fn post_to_pid(event: &CGEvent, pid: i32) {
         unsafe {
             CGEventPostToPid(pid, event as *const CGEvent as *const std::ffi::c_void);

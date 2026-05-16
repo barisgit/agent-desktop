@@ -60,11 +60,13 @@ For raw coordinate commands (`mouse-click`, `mouse-down`, `mouse-up`,
   `--policy focus-fallback` or `--policy physical` for those targets.
 - Drag under headless is best-effort. Cross-app drag-and-drop flows that depend
   on a real cursor are not expected to complete.
-- Headless mouse delivery does not unlock headless text input. The `set-value`
-  and `type` chains require focus-acquiring steps that are explicitly gated by
-  the interaction policy, so they will not work against a backgrounded target
-  under `--policy headless`. Use `--policy focus-fallback` or `--policy physical`
-  for keyboard-driven flows, or perform discovery with brief focus.
+- Headless mouse delivery does not unlock fully headless text input. `set-value`
+  tries a direct AX value write first and succeeds for many text fields; when
+  the AX write is rejected, the fallback chain steps are keyboard-based and need
+  focus, so they are gated off under headless. `type` is keyboard-only and also
+  requires focus today. Use `--policy focus-fallback` or `--policy physical`
+  when keyboard-driven flows are required, or perform discovery with brief
+  focus.
 - Electron apps may collapse their AX tree while backgrounded. Discovery
   (snapshot/find) may need brief focus to populate the tree; the click itself
   does not.

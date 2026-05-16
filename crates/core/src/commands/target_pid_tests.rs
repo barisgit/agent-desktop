@@ -55,16 +55,26 @@ fn resolve_returns_target_pid_when_provided() {
 }
 
 #[test]
-fn resolve_target_pid_wins_over_target_app() {
+fn resolve_target_pid_and_target_app_rejected_as_mutually_exclusive() {
     let adapter = AppsAdapter::new(vec![app("TextEdit", 100)]);
-    let pid = resolve_raw_mouse_target_pid(
+    let err = resolve_raw_mouse_target_pid(
         Some(4321),
         Some("TextEdit"),
         InteractionPolicy::headless(),
         &adapter,
     )
-    .unwrap();
-    assert_eq!(pid, Some(4321));
+    .unwrap_err();
+    match err {
+        AppError::Adapter(e) => {
+            assert_eq!(e.code, ErrorCode::InvalidArgs);
+            assert!(
+                e.suggestion
+                    .as_deref()
+                    .is_some_and(|s| s.contains("--target-pid") && s.contains("--target-app"))
+            );
+        }
+        _ => panic!("expected adapter error"),
+    }
 }
 
 #[test]
@@ -207,6 +217,23 @@ fn resolve_with_ref_uses_ref_pid_under_headless_when_no_target() {
     )
     .unwrap();
     assert_eq!(pid, Some(9090));
+}
+
+#[test]
+fn resolve_with_ref_rejects_both_explicit_targets() {
+    let adapter = AppsAdapter::new(vec![app("Finder", 222)]);
+    let err = resolve_raw_mouse_target_pid_with_ref(
+        Some(1111),
+        Some("Finder"),
+        Some(9090),
+        InteractionPolicy::headless(),
+        &adapter,
+    )
+    .unwrap_err();
+    match err {
+        AppError::Adapter(e) => assert_eq!(e.code, ErrorCode::InvalidArgs),
+        _ => panic!("expected adapter error"),
+    }
 }
 
 #[test]

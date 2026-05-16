@@ -35,6 +35,12 @@ pub fn resolve_raw_mouse_target_pid(
     policy: InteractionPolicy,
     adapter: &dyn PlatformAdapter,
 ) -> Result<Option<i32>, AppError> {
+    if target_pid.is_some() && target_app.is_some() {
+        return Err(AppError::invalid_input_with_suggestion(
+            "target-pid and target-app are mutually exclusive",
+            "Pass either --target-pid <pid> or --target-app <name>, not both",
+        ));
+    }
     if let Some(pid) = target_pid {
         return Ok(Some(pid));
     }
