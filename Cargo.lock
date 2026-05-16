@@ -74,6 +74,7 @@ dependencies = [
  "core-foundation",
  "core-foundation-sys",
  "core-graphics",
+ "foreign-types",
  "rustc-hash",
  "serde",
  "serde_json",

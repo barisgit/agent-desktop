@@ -19,7 +19,10 @@ use serde_json::{Value, json};
 /// explicit `--target-pid` and `--target-app` flags, considering the
 /// requested `InteractionPolicy`.
 ///
-/// - `target_pid` wins when set.
+/// - `target_pid` and `target_app` are mutually exclusive; passing both
+///   returns `INVALID_ARGS`. (Clap also enforces this on the CLI, but
+///   batch JSON bypasses clap, so the check lives here.)
+/// - Otherwise `target_pid`, when set, is returned directly.
 /// - Otherwise looks up `target_app` case-insensitively via
 ///   `list_apps`. Exactly one match returns `Some(pid)`. Zero matches
 ///   returns `APP_NOT_FOUND`. Multiple matches return `INVALID_ARGS`

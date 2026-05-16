@@ -11,6 +11,7 @@ mod imp {
     };
     use core_graphics::event_source::{CGEventSource, CGEventSourceStateID};
     use core_graphics::geometry::CGPoint;
+    use foreign_types::ForeignType;
 
     pub fn synthesize_mouse(event: MouseEvent) -> Result<(), AdapterError> {
         tracing::debug!(
@@ -33,9 +34,11 @@ mod imp {
     }
 
     pub fn synthesize_mouse_to_pid(event: MouseEvent, pid: i32) -> Result<(), AdapterError> {
+        let window_id = crate::system::cg_window::find_cg_window_id_for_pid(pid);
         tracing::debug!(
-            "mouse-to-pid: pid={} {:?} {:?} at ({:.0}, {:.0})",
+            "mouse-to-pid: pid={} window_id={:?} {:?} {:?} at ({:.0}, {:.0})",
             pid,
+            window_id,
             event.kind,
             event.button,
             event.point.x,
@@ -45,14 +48,16 @@ mod imp {
         let cg_button = to_cg_button(&event.button);
         match event.kind {
             MouseEventKind::Move => {
-                post_event_to_pid(CGEventType::MouseMoved, point, cg_button, pid)
+                post_event_to_pid(CGEventType::MouseMoved, point, cg_button, pid, window_id)
             }
             MouseEventKind::Down => {
-                post_event_to_pid(down_type(&event.button), point, cg_button, pid)
+                post_event_to_pid(down_type(&event.button), point, cg_button, pid, window_id)
             }
-            MouseEventKind::Up => post_event_to_pid(up_type(&event.button), point, cg_button, pid),
+            MouseEventKind::Up => {
+                post_event_to_pid(up_type(&event.button), point, cg_button, pid, window_id)
+            }
             MouseEventKind::Click { count } => {
-                synthesize_click_to_pid(point, cg_button, &event.button, count, pid)
+                synthesize_click_to_pid(point, cg_button, &event.button, count, pid, window_id)
             }
         }
     }
@@ -205,9 +210,11 @@ mod imp {
     }
 
     pub fn synthesize_drag_to_pid(params: DragParams, pid: i32) -> Result<(), AdapterError> {
+        let window_id = crate::system::cg_window::find_cg_window_id_for_pid(pid);
         tracing::debug!(
-            "mouse-to-pid: drag pid={} ({:.0},{:.0}) -> ({:.0},{:.0}) duration={}ms",
+            "mouse-to-pid: drag pid={} window_id={:?} ({:.0},{:.0}) -> ({:.0},{:.0}) duration={}ms",
             pid,
+            window_id,
             params.from.x,
             params.from.y,
             params.to.x,
@@ -220,7 +227,13 @@ mod imp {
         let steps = (duration_ms / 16).max(4) as usize;
         let step_delay = std::time::Duration::from_millis(duration_ms / steps as u64);
 
-        post_event_to_pid(CGEventType::LeftMouseDown, from, CGMouseButton::Left, pid)?;
+        post_event_to_pid(
+            CGEventType::LeftMouseDown,
+            from,
+            CGMouseButton::Left,
+            pid,
+            window_id,
+        )?;
         std::thread::sleep(std::time::Duration::from_millis(200));
 
         for i in 1..=steps {
@@ -232,12 +245,19 @@ mod imp {
                 CGPoint::new(x, y),
                 CGMouseButton::Left,
                 pid,
+                window_id,
             )?;
             std::thread::sleep(step_delay);
         }
 
         std::thread::sleep(std::time::Duration::from_millis(500));
-        post_event_to_pid(CGEventType::LeftMouseUp, to, CGMouseButton::Left, pid)
+        post_event_to_pid(
+            CGEventType::LeftMouseUp,
+            to,
+            CGMouseButton::Left,
+            pid,
+            window_id,
+        )
     }
 
     fn synthesize_click(
@@ -263,25 +283,46 @@ mod imp {
         Ok(())
     }
 
+    const FIELD_MOUSE_EVENT_NUMBER: u32 = 0;
+    const FIELD_MOUSE_PRESSURE: u32 = 2;
+    const FIELD_WINDOW_UNDER_MOUSE: u32 = 28;
+    const FIELD_WINDOW_UNDER_MOUSE_HANDLER: u32 = 29;
+    const FIELD_TARGET_PID: u32 = 39;
+    const FIELD_SOURCE_USER_DATA: u32 = 42;
+
+    static MOUSE_EVENT_COUNTER: std::sync::atomic::AtomicI64 = std::sync::atomic::AtomicI64::new(1);
+
     fn set_click_count(event: &CGEvent, count: i64) {
         event.set_integer_value_field(EventField::MOUSE_EVENT_CLICK_STATE, count);
     }
 
-    /// Posts a `CGEvent` to a single process via `CGEventPostToPid`.
-    ///
-    /// `core-graphics`' [`CGEvent`] is `#[repr(transparent)]` over a
-    /// `NonNull<sys::CGEvent>`, so casting `&CGEvent -> *const c_void`
-    /// yields the underlying `CGEventRef` that the C API expects. This
-    /// matches the pattern used by the existing `set_click_count` helper
-    /// and avoids an extra `foreign-types` dependency just to call
-    /// `event.as_ptr()`.
+    fn set_window_under_pointer(event: &CGEvent, window_id: u32) {
+        unsafe {
+            let ptr = event.as_ptr() as *const std::ffi::c_void;
+            CGEventSetIntegerValueField(ptr, FIELD_WINDOW_UNDER_MOUSE, window_id as i64);
+            CGEventSetIntegerValueField(ptr, FIELD_WINDOW_UNDER_MOUSE_HANDLER, window_id as i64);
+        }
+    }
+
+    fn stamp_pid_targeted(event: &CGEvent, pid: i32, is_down: bool) {
+        unsafe {
+            let ptr = event.as_ptr() as *const std::ffi::c_void;
+            let ev_num = MOUSE_EVENT_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            CGEventSetIntegerValueField(ptr, FIELD_MOUSE_EVENT_NUMBER, ev_num);
+            CGEventSetIntegerValueField(ptr, FIELD_MOUSE_PRESSURE, if is_down { 1 } else { 0 });
+            CGEventSetIntegerValueField(ptr, FIELD_TARGET_PID, pid as i64);
+            CGEventSetIntegerValueField(ptr, FIELD_SOURCE_USER_DATA, 1);
+        }
+    }
+
     fn post_to_pid(event: &CGEvent, pid: i32) {
         unsafe {
-            CGEventPostToPid(pid, event as *const CGEvent as *const std::ffi::c_void);
+            CGEventPostToPid(pid, event.as_ptr() as *const std::ffi::c_void);
         }
     }
 
     unsafe extern "C" {
+        fn CGEventSetIntegerValueField(event: *const std::ffi::c_void, field: u32, value: i64);
         fn CGEventPostToPid(pid: i32, event: *const std::ffi::c_void);
     }
 
@@ -335,8 +376,22 @@ mod imp {
         point: CGPoint,
         button: CGMouseButton,
         pid: i32,
+        window_id: Option<u32>,
     ) -> Result<(), AdapterError> {
         let ev = create_event(event_type, point, button)?;
+        let is_down = matches!(
+            event_type,
+            CGEventType::LeftMouseDown
+                | CGEventType::RightMouseDown
+                | CGEventType::OtherMouseDown
+                | CGEventType::LeftMouseDragged
+                | CGEventType::RightMouseDragged
+                | CGEventType::OtherMouseDragged
+        );
+        stamp_pid_targeted(&ev, pid, is_down);
+        if let Some(wid) = window_id {
+            set_window_under_pointer(&ev, wid);
+        }
         post_to_pid(&ev, pid);
         Ok(())
     }
@@ -347,6 +402,7 @@ mod imp {
         button: &MouseButton,
         count: u32,
         pid: i32,
+        window_id: Option<u32>,
     ) -> Result<(), AdapterError> {
         let down_ty = down_type(button);
         let up_ty = up_type(button);
@@ -355,6 +411,12 @@ mod imp {
             let up = create_event(up_ty, point, cg_button)?;
             set_click_count(&down, i as i64);
             set_click_count(&up, i as i64);
+            stamp_pid_targeted(&down, pid, true);
+            stamp_pid_targeted(&up, pid, false);
+            if let Some(wid) = window_id {
+                set_window_under_pointer(&down, wid);
+                set_window_under_pointer(&up, wid);
+            }
             post_to_pid(&down, pid);
             std::thread::sleep(std::time::Duration::from_millis(10));
             post_to_pid(&up, pid);

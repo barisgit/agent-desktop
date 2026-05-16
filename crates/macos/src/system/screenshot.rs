@@ -40,7 +40,7 @@ mod imp {
 
     pub fn capture_app(pid: i32) -> Result<ImageBuffer, AdapterError> {
         tracing::debug!("system: screenshot app pid={pid}");
-        capture(find_cg_window_id_for_pid(pid))
+        capture(crate::system::cg_window::find_cg_window_id_for_pid(pid))
     }
 
     pub fn capture_screen(_idx: usize) -> Result<ImageBuffer, AdapterError> {
@@ -135,24 +135,6 @@ mod imp {
         let w = u32::from_be_bytes([data[16], data[17], data[18], data[19]]);
         let h = u32::from_be_bytes([data[20], data[21], data[22], data[23]]);
         (w, h)
-    }
-
-    fn find_cg_window_id_for_pid(pid: i32) -> Option<u32> {
-        let mut best_id: Option<u32> = None;
-        let mut best_area: f64 = 0.0;
-
-        for record in crate::system::cg_window::visible_window_records() {
-            if record.pid != pid {
-                continue;
-            }
-
-            if record.area > best_area {
-                best_area = record.area;
-                best_id = Some(record.window_number as u32);
-            }
-        }
-
-        best_id
     }
 
     #[cfg(test)]

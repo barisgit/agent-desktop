@@ -100,3 +100,11 @@ fn int_or_float_field(dict: &WindowDictionary, key: &str) -> Option<f64> {
         .and_then(|value| borrowed_cf_number(value.as_concrete_TypeRef()))
         .and_then(|number| number.to_f64())
 }
+
+pub(crate) fn find_cg_window_id_for_pid(pid: i32) -> Option<u32> {
+    visible_window_records()
+        .into_iter()
+        .filter(|record| record.pid == pid)
+        .max_by(|left, right| left.area.total_cmp(&right.area))
+        .and_then(|record| u32::try_from(record.window_number).ok())
+}
