@@ -81,3 +81,53 @@ Any change to `PlatformAdapter::mouse_event` or `PlatformAdapter::drag` must
 keep `target_pid: Option<i32>` in the signature, must keep `None` as a valid
 broadcast variant for backwards compatibility, and must preserve the
 `CGClickToPid`-before-`CGClick` ordering inside macOS chains.
+
+## Appendix: SkyLight private-API probe (negative result)
+
+Before settling on `CGEventPostToPid`, we probed SkyLight private symbols to
+see if any path improved on the sandboxed-app gap. None did. This appendix
+captures the matrix so a future investigation does not have to rediscover the
+symbol set when Apple changes routing on a new macOS release.
+
+Framework: `/System/Library/PrivateFrameworks/SkyLight.framework/SkyLight`.
+All symbols below resolve via `dlopen` + `dlsym` on macOS 14.x.
+
+| Variant         | API                                          | Outcome on macOS 14.x                                                                  |
+| --------------- | -------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `sl-bare`       | `SLEventPostToPid(pid, CGEvent)`             | Indistinguishable from `CGEventPostToPid`; sandboxed apps still discard the event.     |
+| `sl-winfields`  | `SLEventPostToPid` + event fields 28, 29     | Setting `windowUnderMouse` / `windowUnderMouseHandler` to a CGWindowID does not change sandbox acceptance. |
+| `sl-combined`   | `SLEventPostToPid` w/ `combinedSessionState` | Same routing as `sl-bare`.                                                             |
+| `sl-private`    | `SLEventPostToPid` w/ `privateState`         | Same routing as `sl-bare`.                                                             |
+| `slps-conn`     | `SLPSPostEventRecordTo(conn, CGEvent)`       | Posts via the agent's own CGS connection (`CGSMainConnectionID()`); does not cross pids. |
+| `cgs-mouse`     | `CGSPostMouseEvent(conn, type, point, btn)`  | Ignores pid; behaves like a coarser broadcast (close to the HID tap). Not useful.      |
+
+`CGEventField` raw values `28` and `29` correspond to
+`kCGMouseEventWindowUnderMousePerWindow` and
+`kCGMouseEventWindowUnderMousePerWindowHandler`. They are not exposed in any
+public SDK header and originate from leaked OpenStep-era enums.
+
+Verdict: use `CGEventPostToPid`. Fall back to `--policy focus-fallback` or
+`--policy physical` for sandboxed targets.
+
+### Regenerating the probe
+
+The probe is short enough that any coding agent can regenerate it from this
+matrix in a few minutes. Hand it the table above plus this skeleton:
+
+- Swift command-line tool, single `main.swift`.
+- `dlopen` `SkyLight.framework`, `dlsym` each candidate symbol.
+- `unsafeBitCast` resolved symbols through `@convention(c)` function types
+  with these signatures:
+  - `SLEventPostToPid: (pid_t, OpaquePointer) -> Int32`
+  - `SLPSPostEventRecordTo: (Int32, OpaquePointer) -> Int32`
+  - `CGSPostMouseEvent: (Int32, Int32, CGPoint, Int32) -> Int32`
+  - `CGSMainConnectionID: () -> Int32`
+- For each variant build a `CGEvent(mouseEventSource:mouseType:mouseCursorPosition:mouseButton:)`,
+  set `mouseEventClickState = 1`, set fields 28/29 when applicable, post
+  down + 50 ms sleep + up, and report return codes as JSON.
+- CLI: `--list`, `--pid`, `--xy x,y`, `--variant <name|all>`, `--window <cgwindowid>`.
+
+Rebuild with `swiftc -O main.swift -o skylight-probe` and run against a known
+target pid. If any variant starts delivering clicks to a previously-discarding
+sandboxed app on a new macOS version, that is the moment to revisit the
+macOS adapter's headless primitive.
