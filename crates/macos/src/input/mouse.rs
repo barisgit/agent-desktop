@@ -18,6 +18,7 @@ mod imp {
             event.point.x,
             event.point.y
         );
+        crate::system::cursor_overlay::notify_mouse(&event);
         let point = CGPoint::new(event.point.x, event.point.y);
         let cg_button = to_cg_button(&event.button);
         match event.kind {
