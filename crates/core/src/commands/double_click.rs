@@ -1,24 +1,17 @@
 use crate::{
     action::Action,
     adapter::PlatformAdapter,
-    commands::helpers::{RefArgs, execute_ref_action_with_context},
+    commands::helpers::{RefClickArgs, execute_ref_action_with_context},
     context::CommandContext,
     error::AppError,
 };
 use serde_json::Value;
 
-/// Double-click tries AXOpen (headless) first. Without `--headed` and no
-/// AXOpen it fails closed; with `--headed` the chain may perform a physical
-/// double-click.
 pub fn execute(
-    args: RefArgs,
+    args: RefClickArgs,
     adapter: &dyn PlatformAdapter,
     context: &CommandContext,
 ) -> Result<Value, AppError> {
-    execute_ref_action_with_context(
-        args,
-        adapter,
-        context.request_base(Action::DoubleClick),
-        context,
-    )
+    let request = context.request(Action::DoubleClick, args.policy);
+    execute_ref_action_with_context(args.into(), adapter, request, context)
 }

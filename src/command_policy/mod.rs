@@ -127,8 +127,10 @@ fn validate_args(cmd: &Commands) -> Result<(), AppError> {
         | Commands::DoubleClick(args)
         | Commands::TripleClick(args)
         | Commands::RightClick(args)
-        | Commands::Clear(args)
-        | Commands::Focus(args)
+        | Commands::Focus(args) => {
+            validate_ref_id(&args.ref_id)?;
+        }
+        Commands::Clear(args)
         | Commands::Toggle(args)
         | Commands::Check(args)
         | Commands::Uncheck(args)

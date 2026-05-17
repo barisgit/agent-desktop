@@ -333,10 +333,17 @@ pub trait PlatformAdapter: Send + Sync {
     /// platform adapter must route the event to that process only and
     /// must not move the system cursor. When `None`, the event is
     /// broadcast through the normal HID/session event tap.
+    ///
+    /// When `policy.allow_focus_steal` is true, `target_pid` is `Some`,
+    /// and the event is a click, the adapter may activate the target app
+    /// before broadcasting the click and restore the prior frontmost app
+    /// afterwards (focus-cycle fallback). Move/Down/Up events ignore
+    /// `allow_focus_steal` to avoid corrupting in-progress gestures.
     fn mouse_event(
         &self,
         _event: MouseEvent,
         _target_pid: Option<i32>,
+        _policy: crate::InteractionPolicy,
     ) -> Result<(), AdapterError> {
         Err(AdapterError::not_supported("mouse_event"))
     }

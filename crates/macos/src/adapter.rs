@@ -245,7 +245,25 @@ impl PlatformAdapter for MacOSAdapter {
         crate::system::window_ops::execute(win, op)
     }
 
-    fn mouse_event(&self, event: MouseEvent, target_pid: Option<i32>) -> Result<(), AdapterError> {
+    fn mouse_event(
+        &self,
+        event: MouseEvent,
+        target_pid: Option<i32>,
+        policy: agent_desktop_core::InteractionPolicy,
+    ) -> Result<(), AdapterError> {
+        if let (Some(pid), agent_desktop_core::action::MouseEventKind::Click { count }) =
+            (target_pid, &event.kind)
+        {
+            if policy.allow_focus_steal {
+                return crate::system::focus_cycle::focus_cycle_raw_click(
+                    event.point.clone(),
+                    event.button.clone(),
+                    *count,
+                    pid,
+                    policy,
+                );
+            }
+        }
         match target_pid {
             Some(pid) => crate::input::mouse::synthesize_mouse_to_pid(event, pid),
             None => crate::input::mouse::synthesize_mouse(event),

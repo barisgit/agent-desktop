@@ -31,7 +31,12 @@ impl PlatformAdapter for AppsAdapter {
         Ok(self.apps.clone())
     }
 
-    fn mouse_event(&self, event: MouseEvent, target_pid: Option<i32>) -> Result<(), AdapterError> {
+    fn mouse_event(
+        &self,
+        event: MouseEvent,
+        target_pid: Option<i32>,
+        _policy: crate::InteractionPolicy,
+    ) -> Result<(), AdapterError> {
         *self.last_event.lock().unwrap() = Some((event, target_pid));
         Ok(())
     }

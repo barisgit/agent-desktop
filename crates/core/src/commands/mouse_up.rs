@@ -41,6 +41,7 @@ pub fn execute(
             button: args.button,
         },
         target_pid,
+        args.policy,
     )?;
     Ok(json!({ "released": true, "x": args.x, "y": args.y }))
 }

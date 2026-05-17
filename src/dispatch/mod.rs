@@ -39,6 +39,14 @@ pub(crate) fn dispatch(
     result
 }
 
+fn ref_click_args(args: crate::cli_args::RefClickArgs) -> helpers::RefClickArgs {
+    helpers::RefClickArgs {
+        ref_id: args.ref_id,
+        snapshot_id: args.snapshot_id,
+        policy: args.policy.to_core(),
+    }
+}
+
 fn dispatch_inner(
     cmd: Commands,
     adapter: &dyn PlatformAdapter,
@@ -109,10 +117,10 @@ fn dispatch_inner(
             context,
         ),
 
-        Commands::Click(a) => click::execute(ref_args(a), adapter, context),
-        Commands::DoubleClick(a) => double_click::execute(ref_args(a), adapter, context),
-        Commands::TripleClick(a) => triple_click::execute(ref_args(a), adapter, context),
-        Commands::RightClick(a) => right_click::execute(ref_args(a), adapter, context),
+        Commands::Click(a) => click::execute(ref_click_args(a), adapter, context),
+        Commands::DoubleClick(a) => double_click::execute(ref_click_args(a), adapter, context),
+        Commands::TripleClick(a) => triple_click::execute(ref_click_args(a), adapter, context),
+        Commands::RightClick(a) => right_click::execute(ref_click_args(a), adapter, context),
 
         Commands::Type(a) => type_text::execute(
             type_text::TypeArgs {
@@ -136,7 +144,7 @@ fn dispatch_inner(
 
         Commands::Clear(a) => clear::execute(ref_args(a), adapter, context),
 
-        Commands::Focus(a) => focus::execute(ref_args(a), adapter, context),
+        Commands::Focus(a) => focus::execute(ref_click_args(a), adapter, context),
         Commands::Toggle(a) => toggle::execute(ref_args(a), adapter, context),
         Commands::Check(a) => check::execute(ref_args(a), adapter, context),
         Commands::Uncheck(a) => uncheck::execute(ref_args(a), adapter, context),

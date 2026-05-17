@@ -41,6 +41,7 @@ pub fn execute(
             button: args.button,
         },
         target_pid,
+        args.policy,
     )?;
     Ok(json!({ "pressed": true, "x": args.x, "y": args.y }))
 }

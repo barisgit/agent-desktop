@@ -74,6 +74,19 @@ mod imp {
                         return Ok(steps);
                     }
                 }
+                if focus_cycle_permitted(policy) {
+                    if let Some(fc) = def
+                        .steps
+                        .iter()
+                        .find(|s| matches!(s, ChainStep::FocusCycle { .. }))
+                    {
+                        if execute_step(el, caps, fc, &ctx, policy)? {
+                            tracing::debug!("chain: FocusCycle fallback succeeded");
+                            steps.push(ActionStep::succeeded(step_label(fc)));
+                            return Ok(steps);
+                        }
+                    }
+                }
                 return Err(
                     AdapterError::timeout("Chain execution deadline exceeded").with_suggestion(
                         "Retry the command, refresh the snapshot, or increase AGENT_DESKTOP_CHAIN_TIMEOUT_MS for slow apps.",
@@ -81,11 +94,12 @@ mod imp {
                 );
             }
             if matches!(step, ChainStep::CGClick { .. }) && !physical_click_permitted(policy) {
-                if def
-                    .steps
-                    .iter()
-                    .any(|s| matches!(s, ChainStep::CGClickToPid { .. }))
-                {
+                if def.steps.iter().any(|s| {
+                    matches!(
+                        s,
+                        ChainStep::CGClickToPid { .. } | ChainStep::FocusCycle { .. }
+                    )
+                }) {
                     continue;
                 }
                 return Err(AdapterError::policy_denied_for_policy(
@@ -96,6 +110,9 @@ mod imp {
             if matches!(step, ChainStep::CGClickToPid { .. })
                 && !headless_pid_click_permitted(policy)
             {
+                continue;
+            }
+            if matches!(step, ChainStep::FocusCycle { .. }) && !focus_cycle_permitted(policy) {
                 continue;
             }
             let label = step_label(step);
@@ -129,6 +146,7 @@ mod imp {
             ChainStep::CustomWithDeadline { label, .. } => label,
             ChainStep::CGClick { .. } => "CGClick",
             ChainStep::CGClickToPid { .. } => "CGClickToPid",
+            ChainStep::FocusCycle { .. } => "FocusCycle",
         }
     }
 
@@ -248,6 +266,19 @@ mod imp {
                 )
                 .is_ok())
             }
+
+            ChainStep::FocusCycle { button, count } => {
+                if !focus_cycle_permitted(policy) {
+                    return Ok(false);
+                }
+                Ok(crate::system::focus_cycle::focus_cycle_click_via_bounds(
+                    el,
+                    button.clone(),
+                    *count,
+                    policy,
+                )
+                .is_ok())
+            }
         }
     }
 
@@ -267,6 +298,10 @@ mod imp {
 
     fn headless_pid_click_permitted(policy: InteractionPolicy) -> bool {
         !policy.allow_focus_steal && !policy.allow_cursor_move
+    }
+
+    fn focus_cycle_permitted(policy: InteractionPolicy) -> bool {
+        policy.allow_focus_steal
     }
 
     fn set_dynamic_verified(el: &AXElement, attr: &str, value: &str) -> Result<bool, AdapterError> {
@@ -361,8 +396,32 @@ mod imp {
 
     #[cfg(test)]
     mod tests {
-        use super::{finite_target, headless_pid_click_permitted, physical_click_permitted};
+        use super::{
+            finite_target, focus_cycle_permitted, headless_pid_click_permitted,
+            physical_click_permitted,
+        };
         use agent_desktop_core::InteractionPolicy;
+
+        #[test]
+        fn focus_cycle_permitted_when_focus_steal_allowed() {
+            assert!(focus_cycle_permitted(InteractionPolicy::headed()));
+            assert!(focus_cycle_permitted(InteractionPolicy::focus_fallback()));
+            assert!(!focus_cycle_permitted(InteractionPolicy::headless()));
+        }
+
+        #[test]
+        fn focus_cycle_disjoint_from_headless_pid() {
+            for policy in [
+                InteractionPolicy::headed(),
+                InteractionPolicy::focus_fallback(),
+                InteractionPolicy::headless(),
+            ] {
+                assert!(
+                    !(focus_cycle_permitted(policy) && headless_pid_click_permitted(policy)),
+                    "policy {policy:?} permits both focus-cycle and headless-pid paths"
+                );
+            }
+        }
 
         #[test]
         fn headless_pid_permitted_only_under_headless_policy() {

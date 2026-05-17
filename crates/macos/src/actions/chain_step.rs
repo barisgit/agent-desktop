@@ -45,4 +45,8 @@ pub(crate) enum ChainStep {
         button: MouseButton,
         count: u32,
     },
+    FocusCycle {
+        button: MouseButton,
+        count: u32,
+    },
 }

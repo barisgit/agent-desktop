@@ -34,6 +34,7 @@ fn mouse_event_with_self_pid_does_not_panic() {
             button: MouseButton::Left,
         },
         Some(self_pid()),
+        InteractionPolicy::headless(),
     );
     assert!(
         result.is_ok(),
@@ -73,6 +74,7 @@ fn mouse_event_with_none_target_pid_still_works() {
             button: MouseButton::Left,
         },
         None,
+        InteractionPolicy::headed(),
     );
     assert!(
         result.is_ok(),
@@ -120,6 +122,7 @@ fn headless_click_to_self_pid_round_trip() {
             button: MouseButton::Left,
         },
         Some(self_pid()),
+        InteractionPolicy::headless(),
     );
     assert!(
         result.is_ok(),

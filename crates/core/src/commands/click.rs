@@ -1,16 +1,17 @@
 use crate::{
     action::Action,
     adapter::PlatformAdapter,
-    commands::helpers::{RefArgs, execute_ref_action_with_context},
+    commands::helpers::{RefClickArgs, execute_ref_action_with_context},
     context::CommandContext,
     error::AppError,
 };
 use serde_json::Value;
 
 pub fn execute(
-    args: RefArgs,
+    args: RefClickArgs,
     adapter: &dyn PlatformAdapter,
     context: &CommandContext,
 ) -> Result<Value, AppError> {
-    execute_ref_action_with_context(args, adapter, context.request_base(Action::Click), context)
+    let request = context.request(Action::Click, args.policy);
+    execute_ref_action_with_context(args.into(), adapter, request, context)
 }

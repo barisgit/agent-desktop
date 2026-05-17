@@ -2,7 +2,8 @@ use crate::{
     action::Action,
     adapter::{PlatformAdapter, SnapshotSurface, TreeOptions},
     commands::helpers::{
-        RefArgs, apply_post_action_wait, execute_ref_action_result_with_context, probe_app_name,
+        RefClickArgs, apply_post_action_wait, execute_ref_action_result_with_context,
+        probe_app_name,
     },
     context::CommandContext,
     error::AppError,
@@ -11,11 +12,11 @@ use crate::{
 use serde_json::{Value, json};
 
 pub fn execute(
-    args: RefArgs,
+    args: RefClickArgs,
     adapter: &dyn PlatformAdapter,
     context: &CommandContext,
 ) -> Result<Value, AppError> {
-    let request = context.request_base(Action::RightClick);
+    let request = context.request(Action::RightClick, args.policy);
     let (entry, result) = execute_ref_action_result_with_context(
         &args.ref_id,
         args.snapshot_id.as_deref(),

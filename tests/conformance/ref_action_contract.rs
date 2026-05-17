@@ -1,6 +1,7 @@
 use agent_desktop_core::{
+    InteractionPolicy,
     adapter::PlatformAdapter,
-    commands::{click, helpers::RefArgs, wait},
+    commands::{click, helpers::RefClickArgs, wait},
     context::CommandContext,
     refs::{RefEntry, RefMap},
     refs_store::RefStore,
@@ -16,9 +17,10 @@ pub fn run_click_command(
     let context = CommandContext::default();
     with_saved_entry(entry, &context, |snapshot_id| {
         click::execute(
-            RefArgs {
+            RefClickArgs {
                 ref_id: "@e1".into(),
                 snapshot_id: Some(snapshot_id),
+                policy: InteractionPolicy::headless(),
             },
             adapter,
             &context,

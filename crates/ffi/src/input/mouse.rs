@@ -2,6 +2,7 @@ use crate::AdAdapter;
 use crate::error::{self, AdResult};
 use crate::ffi_try::trap_panic;
 use crate::types::{AdMouseButton, AdMouseEvent, AdMouseEventKind};
+use agent_desktop_core::InteractionPolicy;
 use agent_desktop_core::action::{
     MouseButton as CoreMouseButton, MouseEvent as CoreMouseEvent,
     MouseEventKind as CoreMouseEventKind, Point as CorePoint,
@@ -74,7 +75,10 @@ pub unsafe extern "C" fn ad_mouse_event(
             point,
             button,
         };
-        match adapter.inner.mouse_event(core_event, None) {
+        match adapter
+            .inner
+            .mouse_event(core_event, None, InteractionPolicy::headed())
+        {
             Ok(()) => AdResult::Ok,
             Err(e) => {
                 error::set_last_error(&e);

@@ -220,6 +220,31 @@ pub(crate) struct RefArgs {
 
 #[derive(Parser, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
+pub(crate) struct RefClickArgs {
+    #[arg(value_name = "REF", help = "Element ref from snapshot (@e1, @e2 ...)")]
+    pub ref_id: String,
+    #[arg(
+        long = "snapshot",
+        help = "Snapshot ID returned by snapshot; omit to use latest"
+    )]
+    #[serde(rename = "snapshot", alias = "snapshot_id")]
+    pub snapshot_id: Option<String>,
+    #[arg(
+        long,
+        value_enum,
+        default_value_t = crate::cli_args::actions::InteractionPolicyArg::Headless,
+        help = "Interaction policy: headless (default), focus-fallback, physical. focus-fallback and physical enable the focus-cycle fallback when AX fails."
+    )]
+    #[serde(default = "ref_click_policy_default")]
+    pub policy: crate::cli_args::actions::InteractionPolicyArg,
+}
+
+fn ref_click_policy_default() -> crate::cli_args::actions::InteractionPolicyArg {
+    crate::cli_args::actions::InteractionPolicyArg::Headless
+}
+
+#[derive(Parser, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct ListSurfacesArgs {
     #[arg(long, help = "Filter to application by name")]
     pub app: Option<String>,

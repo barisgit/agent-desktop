@@ -118,6 +118,21 @@ pub struct RefArgs {
     pub snapshot_id: Option<String>,
 }
 
+pub struct RefClickArgs {
+    pub ref_id: String,
+    pub snapshot_id: Option<String>,
+    pub policy: InteractionPolicy,
+}
+
+impl From<RefClickArgs> for RefArgs {
+    fn from(args: RefClickArgs) -> Self {
+        Self {
+            ref_id: args.ref_id,
+            snapshot_id: args.snapshot_id,
+        }
+    }
+}
+
 pub(crate) fn resolve_ref_with_context<'a>(
     ref_id: &str,
     snapshot_id: Option<&str>,

@@ -59,6 +59,7 @@ pub fn execute(
             button: MouseButton::Left,
         },
         target_pid,
+        args.policy,
     )?;
     if let Some(ms) = args.duration_ms {
         std::thread::sleep(std::time::Duration::from_millis(ms));

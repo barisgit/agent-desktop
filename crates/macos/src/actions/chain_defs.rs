@@ -65,6 +65,10 @@ mod imp {
                 button: MouseButton::Left,
                 count: 1,
             },
+            ChainStep::FocusCycle {
+                button: MouseButton::Left,
+                count: 1,
+            },
         ],
         suggestion: "Element may not be interactable. Try 'mouse-click --xy X,Y'.",
     };
@@ -97,6 +101,10 @@ mod imp {
                 count: 1,
             },
             ChainStep::CGClick {
+                button: MouseButton::Right,
+                count: 1,
+            },
+            ChainStep::FocusCycle {
                 button: MouseButton::Right,
                 count: 1,
             },
@@ -170,6 +178,10 @@ mod imp {
                 button: MouseButton::Left,
                 count: 1,
             },
+            ChainStep::FocusCycle {
+                button: MouseButton::Left,
+                count: 1,
+            },
         ],
         suggestion: "Try 'click' to focus the element instead.",
     };
@@ -206,6 +218,16 @@ mod imp {
                 return Ok(());
             }
         }
+        if focus_cycle_permitted(policy) {
+            if let Ok(()) = crate::system::focus_cycle::focus_cycle_click_via_bounds(
+                el,
+                MouseButton::Left,
+                2,
+                policy,
+            ) {
+                return Ok(());
+            }
+        }
         crate::actions::dispatch::click_via_bounds(el, MouseButton::Left, 2, policy)
     }
 
@@ -224,11 +246,25 @@ mod imp {
                 return Ok(());
             }
         }
+        if focus_cycle_permitted(policy) {
+            if let Ok(()) = crate::system::focus_cycle::focus_cycle_click_via_bounds(
+                el,
+                MouseButton::Left,
+                3,
+                policy,
+            ) {
+                return Ok(());
+            }
+        }
         crate::actions::dispatch::click_via_bounds(el, MouseButton::Left, 3, policy)
     }
 
     fn headless_pid_click_permitted(policy: InteractionPolicy) -> bool {
         !policy.allow_focus_steal && !policy.allow_cursor_move
+    }
+
+    fn focus_cycle_permitted(policy: InteractionPolicy) -> bool {
+        policy.allow_focus_steal
     }
 }
 

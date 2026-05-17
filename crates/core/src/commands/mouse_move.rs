@@ -40,6 +40,7 @@ pub fn execute(
             button: MouseButton::Left,
         },
         target_pid,
+        args.policy,
     )?;
     Ok(json!({ "moved": true, "x": args.x, "y": args.y }))
 }

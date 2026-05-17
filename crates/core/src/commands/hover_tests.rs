@@ -43,7 +43,12 @@ impl PlatformAdapter for HoverCaptureAdapter {
         Ok(())
     }
 
-    fn mouse_event(&self, event: MouseEvent, _target_pid: Option<i32>) -> Result<(), AdapterError> {
+    fn mouse_event(
+        &self,
+        event: MouseEvent,
+        _target_pid: Option<i32>,
+        _policy: InteractionPolicy,
+    ) -> Result<(), AdapterError> {
         *self.moved_to.lock().unwrap() = Some(event);
         Ok(())
     }

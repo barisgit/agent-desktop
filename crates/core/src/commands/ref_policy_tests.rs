@@ -4,8 +4,10 @@ use crate::{
     action_result::ActionResult,
     adapter::{NativeHandle, PlatformAdapter},
     commands::{
-        check, clear, click, collapse, double_click, expand, focus, helpers::RefArgs, right_click,
-        scroll, scroll_to, select, set_value, toggle, triple_click, type_text, uncheck,
+        check, clear, click, collapse, double_click, expand, focus,
+        helpers::{RefArgs, RefClickArgs},
+        right_click, scroll, scroll_to, select, set_value, toggle, triple_click, type_text,
+        uncheck,
     },
     context::CommandContext,
     error::AdapterError,
@@ -40,6 +42,14 @@ const POLICY_TESTED_COMMANDS: &[&str] = &[
 
 struct RecordingAdapter {
     requests: Mutex<Vec<ActionRequest>>,
+}
+
+fn ref_click_args(snapshot_id: &str) -> RefClickArgs {
+    RefClickArgs {
+        ref_id: "@e1".into(),
+        snapshot_id: Some(snapshot_id.into()),
+        policy: InteractionPolicy::headless(),
+    }
 }
 
 impl RecordingAdapter {
@@ -126,11 +136,11 @@ fn default_ref_commands_are_headless() {
     let adapter = RecordingAdapter::new();
     let context = CommandContext::default();
 
-    click::execute(ref_args(&snapshot_id), &adapter, &context).unwrap();
-    double_click::execute(ref_args(&snapshot_id), &adapter, &context).unwrap();
-    triple_click::execute(ref_args(&snapshot_id), &adapter, &context).unwrap();
+    click::execute(ref_click_args(&snapshot_id), &adapter, &context).unwrap();
+    double_click::execute(ref_click_args(&snapshot_id), &adapter, &context).unwrap();
+    triple_click::execute(ref_click_args(&snapshot_id), &adapter, &context).unwrap();
     let before_right_click = adapter.requests.lock().unwrap().len();
-    let _ = right_click::execute(ref_args(&snapshot_id), &adapter, &context);
+    let _ = right_click::execute(ref_click_args(&snapshot_id), &adapter, &context);
     assert_eq!(
         adapter.requests.lock().unwrap().len(),
         before_right_click + 1
@@ -201,7 +211,12 @@ fn focus_command_is_explicit_headless_policy() {
     let snapshot_id = snapshot_id();
     let adapter = RecordingAdapter::new();
 
-    focus::execute(ref_args(&snapshot_id), &adapter, &CommandContext::default()).unwrap();
+    focus::execute(
+        ref_click_args(&snapshot_id),
+        &adapter,
+        &CommandContext::default(),
+    )
+    .unwrap();
 
     let request = adapter.last_request();
     assert!(matches!(request.action, Action::SetFocus));
@@ -215,10 +230,10 @@ fn headed_context_upgrades_every_ref_command_to_headed() {
     let adapter = RecordingAdapter::new();
     let context = CommandContext::default().with_headed(true);
 
-    click::execute(ref_args(&snapshot_id), &adapter, &context).unwrap();
-    double_click::execute(ref_args(&snapshot_id), &adapter, &context).unwrap();
-    triple_click::execute(ref_args(&snapshot_id), &adapter, &context).unwrap();
-    let _ = right_click::execute(ref_args(&snapshot_id), &adapter, &context);
+    click::execute(ref_click_args(&snapshot_id), &adapter, &context).unwrap();
+    double_click::execute(ref_click_args(&snapshot_id), &adapter, &context).unwrap();
+    triple_click::execute(ref_click_args(&snapshot_id), &adapter, &context).unwrap();
+    let _ = right_click::execute(ref_click_args(&snapshot_id), &adapter, &context);
     clear::execute(ref_args(&snapshot_id), &adapter, &context).unwrap();
     toggle::execute(ref_args(&snapshot_id), &adapter, &context).unwrap();
     check::execute(ref_args(&snapshot_id), &adapter, &context).unwrap();
@@ -226,7 +241,7 @@ fn headed_context_upgrades_every_ref_command_to_headed() {
     expand::execute(ref_args(&snapshot_id), &adapter, &context).unwrap();
     collapse::execute(ref_args(&snapshot_id), &adapter, &context).unwrap();
     scroll_to::execute(ref_args(&snapshot_id), &adapter, &context).unwrap();
-    focus::execute(ref_args(&snapshot_id), &adapter, &context).unwrap();
+    focus::execute(ref_click_args(&snapshot_id), &adapter, &context).unwrap();
     set_value::execute(
         set_value::SetValueArgs {
             ref_id: "@e1".into(),

@@ -2,7 +2,8 @@ use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
 use crate::cli_args::{
-    FindArgs, GetArgs, IsArgs, ListSurfacesArgs, RefArgs, ScreenshotArgs, SnapshotArgs,
+    FindArgs, GetArgs, IsArgs, ListSurfacesArgs, RefArgs, RefClickArgs, ScreenshotArgs,
+    SnapshotArgs,
     actions::{
         DragCliArgs, HoverArgs, KeyComboArgs, MouseClickArgs, MouseMoveArgs, MousePointArgs,
         PressArgs, ScrollArgs, SelectArgs, SetValueArgs, TypeArgs,
@@ -111,15 +112,15 @@ pub(crate) enum Commands {
     #[command(about = "Check element state (visible, enabled, checked, focused, expanded)")]
     Is(IsArgs),
     #[command(about = "Click element via accessibility press action")]
-    Click(RefArgs),
+    Click(RefClickArgs),
     #[command(about = "Open element via AXOpen; physical double-click uses mouse-click")]
-    DoubleClick(RefArgs),
+    DoubleClick(RefClickArgs),
     #[command(
         about = "Triple-click element; returns POLICY_DENIED when physical input is disabled"
     )]
-    TripleClick(RefArgs),
+    TripleClick(RefClickArgs),
     #[command(about = "Right-click and include menu/menu_probe details when available")]
-    RightClick(RefArgs),
+    RightClick(RefClickArgs),
     #[command(about = "Insert text into a text target")]
     Type(TypeArgs),
     #[command(about = "Set element value directly via accessibility attribute")]
@@ -127,7 +128,7 @@ pub(crate) enum Commands {
     #[command(about = "Clear element value to empty string")]
     Clear(RefArgs),
     #[command(about = "Set keyboard focus on element")]
-    Focus(RefArgs),
+    Focus(RefClickArgs),
     #[command(about = "Select an option in a list or dropdown")]
     Select(SelectArgs),
     #[command(about = "Toggle a checkbox or switch")]

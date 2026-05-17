@@ -1,4 +1,5 @@
 use super::*;
+use crate::InteractionPolicy;
 use crate::{
     action_request::ActionRequest,
     action_result::ActionResult,
@@ -103,9 +104,10 @@ fn returns_action_success_when_menu_probe_fails() {
     let snapshot_id = save_refmap(None);
 
     let value = execute(
-        RefArgs {
+        RefClickArgs {
             ref_id: "@e1".into(),
             snapshot_id: Some(snapshot_id),
+            policy: InteractionPolicy::headless(),
         },
         &ProbeFailingAdapter { tree_error: None },
         &CommandContext::default(),
@@ -123,9 +125,10 @@ fn element_not_found_menu_probe_uses_right_click_specific_guidance() {
     let snapshot_id = save_refmap(Some("TargetApp".into()));
 
     let value = execute(
-        RefArgs {
+        RefClickArgs {
             ref_id: "@e1".into(),
             snapshot_id: Some(snapshot_id),
+            policy: InteractionPolicy::headless(),
         },
         &ProbeFailingAdapter {
             tree_error: Some(ErrorCode::ElementNotFound),
