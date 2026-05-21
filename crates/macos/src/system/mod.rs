@@ -1,6 +1,5 @@
 pub mod app_list;
 pub mod app_ops;
-pub mod cursor_overlay;
 pub mod key_dispatch;
 pub mod permissions;
 pub(crate) mod process;

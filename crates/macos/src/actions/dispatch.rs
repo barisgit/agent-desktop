@@ -15,6 +15,7 @@ mod imp {
         chain_defs, discovery, toggle_state,
     };
     use crate::tree::AXElement;
+    use agent_desktop_core::overlay::SuppressClearGuard;
 
     pub(crate) fn click_via_bounds(
         el: &AXElement,
@@ -219,13 +220,6 @@ mod imp {
         Ok(result)
     }
 
-    struct SuppressClearGuard;
-    impl Drop for SuppressClearGuard {
-        fn drop(&mut self) {
-            crate::system::cursor_overlay::clear_suppress();
-        }
-    }
-
     fn notify_overlay_for_action(el: &AXElement, action: &Action) {
         let (button, count) = match action {
             Action::Click | Action::SetFocus | Action::Toggle | Action::Check | Action::Uncheck => {
@@ -247,7 +241,7 @@ mod imp {
             y: bounds.y + bounds.height / 2.0,
         };
         let pid = crate::system::app_ops::pid_from_element(el);
-        crate::system::cursor_overlay::notify_ax_click(point, button, count, pid);
+        agent_desktop_core::overlay::notify_synthetic_click(point, button, count, pid);
     }
 
     pub(crate) fn ax_press_or_fail(el: &AXElement, context: &str) -> Result<(), AdapterError> {
