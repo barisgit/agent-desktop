@@ -65,6 +65,8 @@ mod imp {
         let action = &request.action;
         let label = action_label(action);
         tracing::debug!("action: perform {label}");
+        notify_overlay_for_action(el, action);
+        let _suppress_guard = SuppressClearGuard;
         match action {
             Action::Click => {
                 let caps = discovery::discover(el);
@@ -215,6 +217,37 @@ mod imp {
             result = result.with_state(state);
         }
         Ok(result)
+    }
+
+    struct SuppressClearGuard;
+    impl Drop for SuppressClearGuard {
+        fn drop(&mut self) {
+            crate::system::cursor_overlay::clear_suppress();
+        }
+    }
+
+    fn notify_overlay_for_action(el: &AXElement, action: &Action) {
+        let (button, count) = match action {
+            Action::Click | Action::SetFocus | Action::Toggle | Action::Check | Action::Uncheck => {
+                (MouseButton::Left, 1u32)
+            }
+            Action::DoubleClick => (MouseButton::Left, 2u32),
+            Action::TripleClick => (MouseButton::Left, 3u32),
+            Action::RightClick => (MouseButton::Right, 1u32),
+            _ => return,
+        };
+        let Some(bounds) = crate::tree::read_bounds(el) else {
+            return;
+        };
+        if bounds.width <= 0.0 || bounds.height <= 0.0 {
+            return;
+        }
+        let point = Point {
+            x: bounds.x + bounds.width / 2.0,
+            y: bounds.y + bounds.height / 2.0,
+        };
+        let pid = crate::system::app_ops::pid_from_element(el);
+        crate::system::cursor_overlay::notify_ax_click(point, button, count, pid);
     }
 
     pub(crate) fn ax_press_or_fail(el: &AXElement, context: &str) -> Result<(), AdapterError> {

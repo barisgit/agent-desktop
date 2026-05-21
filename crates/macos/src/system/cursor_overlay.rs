@@ -8,7 +8,7 @@ const ENV_VAR: &str = "AGENT_CURSOR_SOCKET";
 const WRITE_TIMEOUT_MS: u64 = 50;
 
 thread_local! {
-    static SUPPRESS_BROADCAST: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    static SUPPRESS_BROADCAST: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
 }
 
 struct OverlayClient {
@@ -61,10 +61,55 @@ fn client() -> Option<&'static Mutex<OverlayClient>> {
 }
 
 pub fn notify_mouse(event: &MouseEvent) {
-    if SUPPRESS_BROADCAST.with(|c| c.replace(false)) {
+    let suppressed = SUPPRESS_BROADCAST.with(|c| {
+        let n = c.get();
+        if n > 0 {
+            c.set(n - 1);
+            true
+        } else {
+            false
+        }
+    });
+    if suppressed {
         return;
     }
     notify_mouse_for_pid_inner(event, None);
+}
+
+/// Clear any pending broadcast-suppression count on this thread.
+pub fn clear_suppress() {
+    SUPPRESS_BROADCAST.with(|c| c.set(0));
+}
+
+/// Emit a synthetic move+click pair for AX-driven actions that never touch the
+/// raw mouse pipeline. Bumps the broadcast-suppression counter so any CGEvent
+/// fallback that fires during the same action does not double-emit.
+pub fn notify_ax_click(
+    point: agent_desktop_core::action::Point,
+    button: MouseButton,
+    count: u32,
+    target_pid: Option<i32>,
+) {
+    if client().is_none() {
+        return;
+    }
+    notify_mouse_for_pid_inner(
+        &MouseEvent {
+            kind: MouseEventKind::Move,
+            point: point.clone(),
+            button: button.clone(),
+        },
+        target_pid,
+    );
+    notify_mouse_for_pid_inner(
+        &MouseEvent {
+            kind: MouseEventKind::Click { count },
+            point,
+            button,
+        },
+        target_pid,
+    );
+    SUPPRESS_BROADCAST.with(|c| c.set(c.get().saturating_add(2)));
 }
 
 pub fn notify_mouse_for_pid(event: &MouseEvent, target_pid: Option<i32>) {
@@ -76,7 +121,7 @@ pub fn notify_mouse_for_pid(event: &MouseEvent, target_pid: Option<i32>) {
 /// after pre-tagging the event with the target app.
 pub fn notify_mouse_for_pid_then_suppress(event: &MouseEvent, target_pid: i32) {
     notify_mouse_for_pid_inner(event, Some(target_pid));
-    SUPPRESS_BROADCAST.with(|c| c.set(true));
+    SUPPRESS_BROADCAST.with(|c| c.set(c.get().saturating_add(1)));
 }
 
 fn notify_mouse_for_pid_inner(event: &MouseEvent, target_pid: Option<i32>) {
