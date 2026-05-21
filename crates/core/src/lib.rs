@@ -6,6 +6,7 @@ pub mod hints;
 pub mod node;
 pub mod notification;
 pub mod output;
+pub mod overlay;
 pub mod permission_report;
 pub mod permission_state;
 pub mod ref_alloc;
@@ -30,7 +31,7 @@ pub use adapter::{
     WindowFilter,
 };
 pub use error::{AdapterError, AppError, ErrorCode};
-pub use node::{AccessibilityNode, AppInfo, Rect, WindowInfo};
+pub use node::{AccessibilityNode, AppInfo, Bounds, Rect, WindowInfo};
 pub use notification::{NotificationFilter, NotificationInfo};
 pub use output::{AppContext, ErrorPayload, Response, WindowContext};
 pub use permission_report::PermissionReport;

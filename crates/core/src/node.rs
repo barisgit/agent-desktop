@@ -47,6 +47,9 @@ pub struct Rect {
     pub height: f64,
 }
 
+/// Alias for rectangular element bounds used by overlay APIs.
+pub type Bounds = Rect;
+
 fn f64_or_zero<'de, D: Deserializer<'de>>(deserializer: D) -> Result<f64, D::Error> {
     Option::<f64>::deserialize(deserializer).map(|opt| opt.unwrap_or(0.0))
 }
