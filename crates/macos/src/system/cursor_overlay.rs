@@ -112,18 +112,6 @@ pub fn notify_ax_click(
     SUPPRESS_BROADCAST.with(|c| c.set(c.get().saturating_add(2)));
 }
 
-pub fn notify_mouse_for_pid(event: &MouseEvent, target_pid: Option<i32>) {
-    notify_mouse_for_pid_inner(event, target_pid);
-}
-
-/// Pre-notify the overlay with target_pid, then suppress the next broadcast notify_mouse
-/// on this thread. Used by focus_cycle, which routes through broadcast synthesize_mouse
-/// after pre-tagging the event with the target app.
-pub fn notify_mouse_for_pid_then_suppress(event: &MouseEvent, target_pid: i32) {
-    notify_mouse_for_pid_inner(event, Some(target_pid));
-    SUPPRESS_BROADCAST.with(|c| c.set(c.get().saturating_add(1)));
-}
-
 fn notify_mouse_for_pid_inner(event: &MouseEvent, target_pid: Option<i32>) {
     let Some(client) = client() else {
         return;
