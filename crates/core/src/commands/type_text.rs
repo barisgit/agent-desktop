@@ -22,6 +22,7 @@ pub fn execute(args: TypeArgs, adapter: &dyn PlatformAdapter) -> Result<Value, A
     }
 
     let (_entry, handle) = resolve_ref(&args.ref_id, args.snapshot_id.as_deref(), adapter)?;
+    crate::overlay::notify_key_text(&args.text);
     let result = adapter.execute_action(
         handle.handle(),
         ActionRequest::focus_fallback(Action::TypeText(args.text)),

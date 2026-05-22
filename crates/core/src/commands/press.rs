@@ -1,5 +1,5 @@
 use crate::{
-    action::{Action, ActionRequest, KeyCombo, Modifier},
+    action::{Action, ActionRequest, KeyCombo, Modifier, format_combo},
     adapter::PlatformAdapter,
     error::AppError,
 };
@@ -28,6 +28,7 @@ pub fn execute(args: PressArgs, adapter: &dyn PlatformAdapter) -> Result<Value, 
     }
 
     let combo = parse_combo(&normalized)?;
+    crate::overlay::notify_key_combo(&format_combo(&combo));
 
     if let Some(app_name) = &args.app {
         let result = adapter.press_key_for_app(app_name, &combo)?;

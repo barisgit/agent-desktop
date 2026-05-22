@@ -105,6 +105,11 @@ fn finish(cmd_name: &str, result: Result<serde_json::Value, agent_desktop_core::
             if let AppError::Adapter(adapter_error) = &e {
                 payload.platform_detail = adapter_error.platform_detail.clone();
             }
+            agent_desktop_core::overlay::notify_error(
+                None,
+                payload.code.as_str(),
+                payload.message.as_str(),
+            );
             emit_response(&Response::err(cmd_name, payload));
             std::process::exit(1);
         }

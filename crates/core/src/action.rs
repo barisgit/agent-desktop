@@ -182,6 +182,26 @@ pub enum Modifier {
     Shift,
 }
 
+impl Modifier {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Modifier::Cmd => "cmd",
+            Modifier::Ctrl => "ctrl",
+            Modifier::Alt => "alt",
+            Modifier::Shift => "shift",
+        }
+    }
+}
+
+pub fn format_combo(combo: &KeyCombo) -> String {
+    if combo.modifiers.is_empty() {
+        combo.key.clone()
+    } else {
+        let mods: Vec<&str> = combo.modifiers.iter().map(Modifier::as_str).collect();
+        format!("{}+{}", mods.join("+"), combo.key)
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ActionResult {
     pub action: String,

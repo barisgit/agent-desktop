@@ -1,22 +1,4 @@
-use agent_desktop_core::action::{KeyCombo, Modifier};
-
-pub(crate) fn format_combo(combo: &KeyCombo) -> String {
-    let mods: Vec<&str> = combo
-        .modifiers
-        .iter()
-        .map(|m| match m {
-            Modifier::Cmd => "cmd",
-            Modifier::Ctrl => "ctrl",
-            Modifier::Alt => "alt",
-            Modifier::Shift => "shift",
-        })
-        .collect();
-    if mods.is_empty() {
-        combo.key.clone()
-    } else {
-        format!("{}+{}", mods.join("+"), combo.key)
-    }
-}
+pub(crate) use agent_desktop_core::action::format_combo;
 
 #[cfg(test)]
 mod tests {
