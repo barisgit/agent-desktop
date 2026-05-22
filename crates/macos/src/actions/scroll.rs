@@ -42,7 +42,7 @@ pub(crate) fn ax_scroll(
             }
         }
         if ok {
-            return Ok(());
+            return scroll_ok(target, direction, amount);
         }
     }
 
@@ -64,24 +64,24 @@ pub(crate) fn ax_scroll(
             completed += 1;
         }
         if completed == amount {
-            return Ok(());
+            return scroll_ok(target, direction, amount);
         }
     }
 
     if let Some(bar) = get_scroll_bar(target, bar_attr) {
         if try_scroll_bar_value_shift(&bar, direction, amount) {
-            return Ok(());
+            return scroll_ok(target, direction, amount);
         }
         if try_scroll_bar_sub_elements(&bar, direction) {
-            return Ok(());
+            return scroll_ok(target, direction, amount);
         }
     }
 
     if policy.allow_focus_steal && try_focus_child_in_direction(target, direction) {
-        return Ok(());
+        return scroll_ok(target, direction, amount);
     }
     if try_select_row_in_direction(target, direction) {
-        return Ok(());
+        return scroll_ok(target, direction, amount);
     }
 
     if policy.allow_focus_steal {
@@ -104,7 +104,7 @@ pub(crate) fn ax_scroll(
             if focus_err == kAXErrorSuccess {
                 std::thread::sleep(std::time::Duration::from_millis(50));
                 crate::input::keyboard::synthesize_keycode(keycode, amount)?;
-                return Ok(());
+                return scroll_ok(target, direction, amount);
             }
         }
     }
@@ -112,15 +112,9 @@ pub(crate) fn ax_scroll(
     if policy.allow_focus_steal && policy.allow_cursor_move {
         if let Some(pid) = crate::system::app_ops::pid_from_element(el) {
             let _ = crate::system::app_ops::ensure_app_focused(pid);
-            if let Some(b) = crate::tree::read_bounds(target) {
-                let (dy, dx) = scroll_wheel_delta(direction, amount);
-                return crate::input::mouse::synthesize_scroll_at(
-                    b.x + b.width / 2.0,
-                    b.y + b.height / 2.0,
-                    dy,
-                    dx,
-                );
-            }
+            let (dy, dx) = scroll_wheel_delta(direction, amount);
+            let point = scroll_event_point(target);
+            return crate::input::mouse::synthesize_scroll_at(point.x, point.y, dy, dx);
         }
     }
 
@@ -148,6 +142,51 @@ fn scroll_wheel_delta(
         Direction::Up => (amount as i32 * 5, 0),
         Direction::Right => (0, amount as i32 * 5),
         Direction::Left => (0, -(amount as i32) * 5),
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn scroll_ok(
+    target: &AXElement,
+    direction: &agent_desktop_core::action::Direction,
+    amount: u32,
+) -> Result<(), AdapterError> {
+    let (dy, dx) = scroll_wheel_delta(direction, amount);
+    let point = scroll_event_point(target);
+    agent_desktop_core::overlay::notify_scroll(point, dx as f64, dy as f64, None);
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+fn scroll_event_point(target: &AXElement) -> agent_desktop_core::action::Point {
+    if let Some(bounds) = crate::tree::read_bounds(target) {
+        return agent_desktop_core::action::Point {
+            x: bounds.x + bounds.width / 2.0,
+            y: bounds.y + bounds.height / 2.0,
+        };
+    }
+    cursor_point()
+}
+
+#[cfg(target_os = "macos")]
+fn cursor_point() -> agent_desktop_core::action::Point {
+    use core_graphics::geometry::CGPoint;
+    use std::ffi::c_void;
+
+    unsafe extern "C" {
+        fn CGEventCreate(source: *const c_void) -> *mut c_void;
+        fn CGEventGetLocation(event: *const c_void) -> CGPoint;
+    }
+
+    let event = unsafe { CGEventCreate(std::ptr::null()) };
+    if event.is_null() {
+        return agent_desktop_core::action::Point { x: 0.0, y: 0.0 };
+    }
+    let point = unsafe { CGEventGetLocation(event) };
+    unsafe { core_foundation::base::CFRelease(event as _) };
+    agent_desktop_core::action::Point {
+        x: point.x,
+        y: point.y,
     }
 }
 

@@ -30,6 +30,9 @@ mod imp {
             },
             combo.key
         );
+        agent_desktop_core::overlay::notify_key_combo(&crate::input::key_format::format_combo(
+            combo,
+        ));
         let key_code = key_name_to_code(&combo.key)?;
 
         let sys_wide = unsafe { AXUIElementCreateSystemWide() };
@@ -109,6 +112,7 @@ mod imp {
 
     pub fn synthesize_text(text: &str) -> Result<(), AdapterError> {
         tracing::debug!("keyboard: synthesize_text {} chars", text.chars().count());
+        agent_desktop_core::overlay::notify_key_text(text);
         let sys_wide = unsafe { AXUIElementCreateSystemWide() };
         if sys_wide.is_null() {
             return Err(AdapterError::internal(

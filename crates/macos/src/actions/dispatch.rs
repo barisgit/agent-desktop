@@ -17,6 +17,15 @@ mod imp {
     use crate::tree::AXElement;
     use agent_desktop_core::overlay::SuppressClearGuard;
 
+    /// Clears the overlay target before suppression counters are reset.
+    struct TargetGuard;
+
+    impl Drop for TargetGuard {
+        fn drop(&mut self) {
+            agent_desktop_core::overlay::target_clear();
+        }
+    }
+
     pub(crate) fn click_via_bounds(
         el: &AXElement,
         button: MouseButton,
@@ -66,161 +75,167 @@ mod imp {
         let action = &request.action;
         let label = action_label(action);
         tracing::debug!("action: perform {label}");
-        notify_overlay_for_action(el, action);
         let _suppress_guard = SuppressClearGuard;
-        match action {
-            Action::Click => {
-                let caps = discovery::discover(el);
-                let ctx = ChainContext {
-                    dynamic_value: None,
-                    deadline: None,
-                };
-                execute_chain(el, &caps, &chain_defs::CLICK_CHAIN, &ctx, request.policy)?;
+        let _target_guard = notify_overlay_for_action(el, action).then_some(TargetGuard);
+        let result = (|| -> Result<ActionResult, AdapterError> {
+            match action {
+                Action::Click => {
+                    let caps = discovery::discover(el);
+                    let ctx = ChainContext {
+                        dynamic_value: None,
+                        deadline: None,
+                    };
+                    execute_chain(el, &caps, &chain_defs::CLICK_CHAIN, &ctx, request.policy)?;
+                }
+
+                Action::DoubleClick => {
+                    let caps = discovery::discover(el);
+                    chain_defs::double_click(el, &caps, request.policy)?;
+                }
+
+                Action::RightClick => {
+                    let caps = discovery::discover(el);
+                    let ctx = ChainContext {
+                        dynamic_value: None,
+                        deadline: None,
+                    };
+                    execute_chain(
+                        el,
+                        &caps,
+                        &chain_defs::RIGHT_CLICK_CHAIN,
+                        &ctx,
+                        request.policy,
+                    )?;
+                }
+
+                Action::Toggle => {
+                    toggle_state::toggle(el, request.policy)?;
+                }
+
+                Action::SetValue(val) => {
+                    let caps = discovery::discover(el);
+                    let ctx = ChainContext {
+                        dynamic_value: Some(val),
+                        deadline: None,
+                    };
+                    execute_chain(
+                        el,
+                        &caps,
+                        &chain_defs::SET_VALUE_CHAIN,
+                        &ctx,
+                        request.policy,
+                    )?;
+                }
+
+                Action::SetFocus => {
+                    let caps = discovery::discover(el);
+                    let ctx = ChainContext {
+                        dynamic_value: None,
+                        deadline: None,
+                    };
+                    execute_chain(el, &caps, &chain_defs::FOCUS_CHAIN, &ctx, request.policy)?;
+                }
+
+                Action::TypeText(text) => {
+                    crate::actions::type_text::execute_type(el, text, request.policy)?;
+                }
+
+                Action::PressKey(combo) => {
+                    crate::input::keyboard::synthesize_key(combo)?;
+                }
+
+                Action::Expand => {
+                    let caps = discovery::discover(el);
+                    let ctx = ChainContext {
+                        dynamic_value: None,
+                        deadline: None,
+                    };
+                    execute_chain(el, &caps, &chain_defs::EXPAND_CHAIN, &ctx, request.policy)?;
+                }
+
+                Action::Collapse => {
+                    let caps = discovery::discover(el);
+                    let ctx = ChainContext {
+                        dynamic_value: None,
+                        deadline: None,
+                    };
+                    execute_chain(el, &caps, &chain_defs::COLLAPSE_CHAIN, &ctx, request.policy)?;
+                }
+
+                Action::Select(value) => {
+                    crate::actions::extras::select_value(el, value)?;
+                }
+
+                Action::Scroll(direction, amount) => {
+                    crate::actions::scroll::ax_scroll(el, direction, *amount, request.policy)?;
+                }
+
+                Action::Check => {
+                    toggle_state::check_uncheck(el, true, request.policy)?;
+                }
+
+                Action::Uncheck => {
+                    toggle_state::check_uncheck(el, false, request.policy)?;
+                }
+
+                Action::TripleClick => {
+                    let caps = discovery::discover(el);
+                    chain_defs::triple_click(el, &caps, request.policy)?;
+                }
+
+                Action::ScrollTo => {
+                    let caps = discovery::discover(el);
+                    let ctx = ChainContext {
+                        dynamic_value: None,
+                        deadline: None,
+                    };
+                    execute_chain(
+                        el,
+                        &caps,
+                        &chain_defs::SCROLL_TO_CHAIN,
+                        &ctx,
+                        request.policy,
+                    )?;
+                }
+
+                Action::Clear => {
+                    let caps = discovery::discover(el);
+                    let ctx = ChainContext {
+                        dynamic_value: Some(""),
+                        deadline: None,
+                    };
+                    execute_chain(el, &caps, &chain_defs::CLEAR_CHAIN, &ctx, request.policy)?;
+                }
+
+                Action::KeyDown(_) | Action::KeyUp(_) | Action::Hover | Action::Drag(_) => {
+                    Err(AdapterError::new(
+                        ErrorCode::ActionNotSupported,
+                        format!(
+                            "{} requires adapter-level handling, not element action",
+                            label
+                        ),
+                    )
+                    .with_suggestion("Use the top-level command (e.g. 'hover', 'drag', 'key-down') instead of targeting an element."))?;
+                }
+
+                _ => {
+                    Err(AdapterError::not_supported(&label))?;
+                }
             }
 
-            Action::DoubleClick => {
-                let caps = discovery::discover(el);
-                chain_defs::double_click(el, &caps, request.policy)?;
+            let mut result = ActionResult::new(label);
+            if let Some(state) = crate::actions::post_state::read_post_state(el, action) {
+                result = result.with_state(state);
             }
-
-            Action::RightClick => {
-                let caps = discovery::discover(el);
-                let ctx = ChainContext {
-                    dynamic_value: None,
-                    deadline: None,
-                };
-                execute_chain(
-                    el,
-                    &caps,
-                    &chain_defs::RIGHT_CLICK_CHAIN,
-                    &ctx,
-                    request.policy,
-                )?;
-            }
-
-            Action::Toggle => {
-                toggle_state::toggle(el, request.policy)?;
-            }
-
-            Action::SetValue(val) => {
-                let caps = discovery::discover(el);
-                let ctx = ChainContext {
-                    dynamic_value: Some(val),
-                    deadline: None,
-                };
-                execute_chain(
-                    el,
-                    &caps,
-                    &chain_defs::SET_VALUE_CHAIN,
-                    &ctx,
-                    request.policy,
-                )?;
-            }
-
-            Action::SetFocus => {
-                let caps = discovery::discover(el);
-                let ctx = ChainContext {
-                    dynamic_value: None,
-                    deadline: None,
-                };
-                execute_chain(el, &caps, &chain_defs::FOCUS_CHAIN, &ctx, request.policy)?;
-            }
-
-            Action::TypeText(text) => {
-                crate::actions::type_text::execute_type(el, text, request.policy)?;
-            }
-
-            Action::PressKey(combo) => {
-                crate::input::keyboard::synthesize_key(combo)?;
-            }
-
-            Action::Expand => {
-                let caps = discovery::discover(el);
-                let ctx = ChainContext {
-                    dynamic_value: None,
-                    deadline: None,
-                };
-                execute_chain(el, &caps, &chain_defs::EXPAND_CHAIN, &ctx, request.policy)?;
-            }
-
-            Action::Collapse => {
-                let caps = discovery::discover(el);
-                let ctx = ChainContext {
-                    dynamic_value: None,
-                    deadline: None,
-                };
-                execute_chain(el, &caps, &chain_defs::COLLAPSE_CHAIN, &ctx, request.policy)?;
-            }
-
-            Action::Select(value) => {
-                crate::actions::extras::select_value(el, value)?;
-            }
-
-            Action::Scroll(direction, amount) => {
-                crate::actions::scroll::ax_scroll(el, direction, *amount, request.policy)?;
-            }
-
-            Action::Check => {
-                toggle_state::check_uncheck(el, true, request.policy)?;
-            }
-
-            Action::Uncheck => {
-                toggle_state::check_uncheck(el, false, request.policy)?;
-            }
-
-            Action::TripleClick => {
-                let caps = discovery::discover(el);
-                chain_defs::triple_click(el, &caps, request.policy)?;
-            }
-
-            Action::ScrollTo => {
-                let caps = discovery::discover(el);
-                let ctx = ChainContext {
-                    dynamic_value: None,
-                    deadline: None,
-                };
-                execute_chain(
-                    el,
-                    &caps,
-                    &chain_defs::SCROLL_TO_CHAIN,
-                    &ctx,
-                    request.policy,
-                )?;
-            }
-
-            Action::Clear => {
-                let caps = discovery::discover(el);
-                let ctx = ChainContext {
-                    dynamic_value: Some(""),
-                    deadline: None,
-                };
-                execute_chain(el, &caps, &chain_defs::CLEAR_CHAIN, &ctx, request.policy)?;
-            }
-
-            Action::KeyDown(_) | Action::KeyUp(_) | Action::Hover | Action::Drag(_) => {
-                return Err(AdapterError::new(
-                    ErrorCode::ActionNotSupported,
-                    format!(
-                        "{} requires adapter-level handling, not element action",
-                        label
-                    ),
-                )
-                .with_suggestion("Use the top-level command (e.g. 'hover', 'drag', 'key-down') instead of targeting an element."));
-            }
-
-            _ => {
-                return Err(AdapterError::not_supported(&label));
-            }
+            Ok(result)
+        })();
+        if let Err(error) = &result {
+            agent_desktop_core::overlay::notify_error(None, error.code.as_str(), &error.message);
         }
-
-        let mut result = ActionResult::new(label);
-        if let Some(state) = crate::actions::post_state::read_post_state(el, action) {
-            result = result.with_state(state);
-        }
-        Ok(result)
+        result
     }
 
-    fn notify_overlay_for_action(el: &AXElement, action: &Action) {
+    fn notify_overlay_for_action(el: &AXElement, action: &Action) -> bool {
         let (button, count) = match action {
             Action::Click | Action::SetFocus | Action::Toggle | Action::Check | Action::Uncheck => {
                 (MouseButton::Left, 1u32)
@@ -228,20 +243,22 @@ mod imp {
             Action::DoubleClick => (MouseButton::Left, 2u32),
             Action::TripleClick => (MouseButton::Left, 3u32),
             Action::RightClick => (MouseButton::Right, 1u32),
-            _ => return,
+            _ => return false,
         };
         let Some(bounds) = crate::tree::read_bounds(el) else {
-            return;
+            return false;
         };
         if bounds.width <= 0.0 || bounds.height <= 0.0 {
-            return;
+            return false;
         }
         let point = Point {
             x: bounds.x + bounds.width / 2.0,
             y: bounds.y + bounds.height / 2.0,
         };
         let pid = crate::system::app_ops::pid_from_element(el);
+        agent_desktop_core::overlay::target_set(bounds, pid);
         agent_desktop_core::overlay::notify_synthetic_click(point, button, count, pid);
+        true
     }
 
     pub(crate) fn ax_press_or_fail(el: &AXElement, context: &str) -> Result<(), AdapterError> {
@@ -300,4 +317,42 @@ fn action_label(action: &Action) -> String {
         _ => "unknown",
     }
     .to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use std::cell::RefCell;
+
+    thread_local! {
+        static DROP_TRACE: RefCell<Vec<&'static str>> = const { RefCell::new(Vec::new()) };
+    }
+
+    struct TestSuppressGuard;
+
+    impl Drop for TestSuppressGuard {
+        fn drop(&mut self) {
+            DROP_TRACE.with(|trace| trace.borrow_mut().push("SuppressClearGuard"));
+        }
+    }
+
+    struct TestTargetGuard;
+
+    impl Drop for TestTargetGuard {
+        fn drop(&mut self) {
+            DROP_TRACE.with(|trace| trace.borrow_mut().push("TargetGuard"));
+        }
+    }
+
+    #[test]
+    fn guard_drop_order() {
+        DROP_TRACE.with(|trace| trace.borrow_mut().clear());
+
+        {
+            let _suppress_guard = TestSuppressGuard;
+            let _target_guard = TestTargetGuard;
+        }
+
+        let trace = DROP_TRACE.with(|trace| trace.borrow().clone());
+        assert_eq!(trace, vec!["TargetGuard", "SuppressClearGuard"]);
+    }
 }

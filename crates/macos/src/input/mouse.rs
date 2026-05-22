@@ -169,6 +169,12 @@ mod imp {
         }
         unsafe {
             CGEventSetLocation(event, CGPoint::new(x, y));
+            agent_desktop_core::overlay::notify_scroll(
+                agent_desktop_core::action::Point { x, y },
+                dx as f64,
+                dy as f64,
+                None,
+            );
             CGEventPost(0, event);
             core_foundation::base::CFRelease(event as _);
         }

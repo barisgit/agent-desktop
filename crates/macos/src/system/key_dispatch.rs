@@ -4,6 +4,8 @@ use agent_desktop_core::{
 };
 
 #[cfg(target_os = "macos")]
+use crate::input::key_format::format_combo;
+#[cfg(target_os = "macos")]
 use agent_desktop_core::{action::Modifier, adapter::WindowFilter};
 
 #[cfg(target_os = "macos")]
@@ -201,25 +203,6 @@ fn ax_post_keyboard_event(
     }
 
     Ok(())
-}
-
-#[cfg(target_os = "macos")]
-fn format_combo(combo: &KeyCombo) -> String {
-    let mods: Vec<&str> = combo
-        .modifiers
-        .iter()
-        .map(|m| match m {
-            Modifier::Cmd => "cmd",
-            Modifier::Ctrl => "ctrl",
-            Modifier::Alt => "alt",
-            Modifier::Shift => "shift",
-        })
-        .collect();
-    if mods.is_empty() {
-        combo.key.clone()
-    } else {
-        format!("{}+{}", mods.join("+"), combo.key)
-    }
 }
 
 #[cfg(target_os = "macos")]

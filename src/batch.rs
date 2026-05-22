@@ -15,6 +15,14 @@ use crate::{
     cli_args_system::BatchArgs,
 };
 
+struct ThinkingGuard;
+
+impl Drop for ThinkingGuard {
+    fn drop(&mut self) {
+        agent_desktop_core::overlay::thinking_set(false);
+    }
+}
+
 pub(crate) fn execute(
     args: BatchArgs,
     adapter: &dyn PlatformAdapter,
@@ -22,6 +30,8 @@ pub(crate) fn execute(
 ) -> Result<Value, AppError> {
     let commands = agent_desktop_core::commands::batch::parse_commands(&args.commands_json)?;
     let mut results = Vec::new();
+    agent_desktop_core::overlay::thinking_set(true);
+    let _thinking_guard = ThinkingGuard;
 
     for item in commands {
         let command = item.command.clone();
