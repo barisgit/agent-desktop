@@ -227,6 +227,10 @@ mod tests {
             super::format_thinking(true),
             r#"{"kind":"thinking","thinking":true}"#
         );
+        assert_eq!(
+            super::format_thinking(false),
+            r#"{"kind":"thinking","thinking":false}"#
+        );
     }
 
     #[test]

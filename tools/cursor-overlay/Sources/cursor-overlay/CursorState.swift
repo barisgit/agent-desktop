@@ -35,6 +35,10 @@ final class CursorState: ObservableObject {
     @Published var wiggleSeed: Double = 0.0
     @Published var targetPid: Int? = nil
     @Published var targetVisible: Bool = true
+    @Published var typingText: String? = nil
+    @Published var scrollIndicator: (point: CGPoint, dx: Double, dy: Double)? = nil
+    @Published var targetBounds: CGRect? = nil
+    @Published var errorFlash: (code: String, message: String)? = nil
 
     func applyMove(_ p: CGPoint, targetPid: Int?) {
         virtualCursor = p
@@ -60,11 +64,54 @@ final class CursorState: ObservableObject {
     }
 
     func setColor(r: Double, g: Double, b: Double) {
-        color = Color(red: r, green: g, blue: b)
+        let scale = max(r, g, b) > 1.0 ? 255.0 : 1.0
+        color = Color(red: r / scale, green: g / scale, blue: b / scale)
     }
 
     func setThinking(_ v: Bool) {
         thinking = v
+    }
+
+    func setTypingText(_ text: String?) {
+        typingText = text
+    }
+
+    func clearTypingText() {
+        typingText = nil
+    }
+
+    func setScrollIndicator(point: CGPoint, dx: Double, dy: Double, targetPid: Int?) {
+        scrollIndicator = (point: point, dx: dx, dy: dy)
+        virtualCursor = point
+        hasVirtualCursor = true
+        lastMoveAt = Date()
+        self.targetPid = targetPid
+    }
+
+    func clearScrollIndicator() {
+        scrollIndicator = nil
+    }
+
+    func setTargetBounds(_ bounds: CGRect, targetPid: Int?) {
+        targetBounds = bounds
+        self.targetPid = targetPid
+    }
+
+    func clearTargetBounds() {
+        targetBounds = nil
+    }
+
+    func setErrorFlash(point: CGPoint?, code: String, message: String) {
+        if let point {
+            virtualCursor = point
+            hasVirtualCursor = true
+            lastMoveAt = Date()
+        }
+        errorFlash = (code: code, message: message)
+    }
+
+    func clearErrorFlash() {
+        errorFlash = nil
     }
 
     func tickWiggle(t: Double) {

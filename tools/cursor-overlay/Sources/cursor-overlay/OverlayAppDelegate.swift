@@ -140,12 +140,25 @@ final class OverlayAppDelegate: NSObject, NSApplicationDelegate {
             let p = CGPoint(x: x, y: y)
             cursorState.applyClick(p, targetPid: pid)
             refreshVisibilityNow(pid: pid, point: p)
+        case .scroll(let x, let y, let dx, let dy, let pid):
+            let p = CGPoint(x: x, y: y)
+            cursorState.setScrollIndicator(point: p, dx: dx, dy: dy, targetPid: pid)
+            refreshVisibilityNow(pid: pid, point: p)
+        case .key(let text, let combo):
+            cursorState.setTypingText(text ?? combo)
+        case .targetSet(let x, let y, let w, let h, let pid):
+            cursorState.setTargetBounds(CGRect(x: x, y: y, width: w, height: h), targetPid: pid)
+        case .targetClear:
+            cursorState.clearTargetBounds()
+        case .error(let x, let y, let code, let message):
+            let point = x.flatMap { xValue in y.map { CGPoint(x: xValue, y: $0) } }
+            cursorState.setErrorFlash(point: point, code: code, message: message)
+        case .thinking(let v):
+            cursorState.setThinking(v)
         case .setVisible(let v):
             cursorState.setVisible(v)
         case .setColor(let r, let g, let b):
             cursorState.setColor(r: r, g: g, b: b)
-        case .setThinking(let v):
-            cursorState.setThinking(v)
         case .bye:
             NSApp.terminate(nil)
         }
