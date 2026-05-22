@@ -96,4 +96,4 @@ No `AGENT_CURSOR_START_CMD` needed; you own the overlay's lifetime in Terminal A
 
 ## Protocol
 
-See [PROTOCOL.md](./PROTOCOL.md) for the exact JSON shape of every event, the `target_pid` convention, and the back-compat policy for the deprecated `set_thinking` event.
+See [PROTOCOL.md](./PROTOCOL.md) for the exact JSON shape of every event and the `target_pid` convention.

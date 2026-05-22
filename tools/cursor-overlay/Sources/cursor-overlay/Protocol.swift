@@ -106,11 +106,6 @@ struct ProtocolDecoder {
                 g: try numericField(dict, "g"),
                 b: try numericField(dict, "b")
             )
-        case "set_thinking":
-            guard let v = dict["thinking"] as? Bool else {
-                throw ProtocolDecodeError.missingField("thinking")
-            }
-            return .thinking(v)
         case "bye":
             return .bye
         default:

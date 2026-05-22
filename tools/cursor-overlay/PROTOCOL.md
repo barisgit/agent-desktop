@@ -35,7 +35,7 @@ Move the cursor to the click point and emit a click ripple. The renderer uses `b
 
 Shape: `{"kind":"click","x":N,"y":N,"button":"left|right|middle","count":N,"target_pid":N?}`
 
-Optional fields: `target_pid` is omitted for broadcast clicks. v1 decoders defaulted missing `button` to `left` and missing `count` to `1`; v2 emitters should send both fields.
+Optional fields: `target_pid` is omitted for broadcast clicks. Emitters should always send both `button` and `count`.
 
 Example:
 
@@ -103,11 +103,11 @@ Example:
 
 ### thinking
 
-Toggle the renderer's busy visual state. Payload field: `thinking: bool`. Field name is reused from the v1 `set_thinking` event to preserve decoder compatibility.
+Toggle the renderer's busy visual state. Payload field: `thinking: bool`.
 
 Shape: `{"kind":"thinking","thinking":true}` or `{"kind":"thinking","thinking":false}`
 
-Optional fields: none. DEPRECATED-BUT-ACCEPTED for one release: `set_thinking` with the same payload remains accepted by v2 Swift; v2 emitters should use `thinking`.
+Optional fields: none.
 
 Example:
 
