@@ -45,6 +45,7 @@ pub(crate) fn suppress_count() -> u32 {
 mod tests {
     use super::*;
     use crate::action::{MouseButton, MouseEvent, MouseEventKind, Point};
+    use crate::overlay::client::{AGENT_CURSOR_START_CMD, ENV_LOCK, ENV_VAR};
     use crate::overlay::{notify_mouse, notify_synthetic_click};
 
     fn event() -> MouseEvent {
@@ -57,6 +58,11 @@ mod tests {
 
     #[test]
     fn guard_decrements_to_zero() {
+        let _g = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        unsafe {
+            std::env::remove_var(ENV_VAR);
+            std::env::remove_var(AGENT_CURSOR_START_CMD);
+        }
         clear_suppress();
         let point = Point { x: 10.0, y: 20.0 };
         notify_synthetic_click(point.clone(), MouseButton::Left, 1, None);

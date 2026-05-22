@@ -9,18 +9,37 @@ use crate::overlay::suppress;
 use crate::overlay::transport::Conn;
 #[cfg(unix)]
 use std::io::Write;
+#[cfg(unix)]
+use std::process::{Command, Stdio};
 use std::sync::Mutex;
 #[cfg(unix)]
 use std::sync::OnceLock;
 #[cfg(unix)]
-use std::time::Duration;
+use std::thread;
+#[cfg(unix)]
+use std::time::{Duration, Instant};
 
-pub const ENV_VAR: &str = "AGENT_CURSOR_SOCKET";
+pub(crate) const AGENT_CURSOR_SOCKET: &str = "AGENT_CURSOR_SOCKET";
+pub(crate) const AGENT_CURSOR_START_CMD: &str = "AGENT_CURSOR_START_CMD";
+pub const ENV_VAR: &str = AGENT_CURSOR_SOCKET;
+#[cfg(unix)]
+const CONNECT_BUDGET: Duration = Duration::from_millis(50);
+#[cfg(unix)]
+const POLL_BUDGET: Duration = Duration::from_millis(300);
+#[cfg(unix)]
+const POLL_INTERVAL: Duration = Duration::from_millis(25);
 #[cfg(unix)]
 const WRITE_TIMEOUT_MS: u64 = 50;
 
 #[cfg(unix)]
-static CLIENT: OnceLock<Option<Mutex<OverlayClient>>> = OnceLock::new();
+static CLIENT: OnceLock<Mutex<OverlayClient>> = OnceLock::new();
+
+#[cfg(test)]
+pub(crate) static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+#[cfg(any(test, feature = "test-hooks"))]
+/// Counts start-command spawn attempts for lifecycle tests and test-hook builds.
+pub(crate) static SPAWN_COUNT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
 
 /// Socket client that writes newline-delimited overlay protocol messages.
 pub struct OverlayClient {
@@ -41,13 +60,44 @@ impl OverlayClient {
         if self.stream.is_some() {
             return true;
         }
-        match Conn::connect(&self.path) {
-            Ok(stream) => {
-                let _ = stream.set_write_timeout(Some(Duration::from_millis(WRITE_TIMEOUT_MS)));
-                self.stream = Some(stream);
+
+        if let Ok(stream) = try_connect_with_budget(&self.path, CONNECT_BUDGET) {
+            self.cache_stream(stream);
+            return true;
+        }
+
+        let Some(start_cmd) = std::env::var(AGENT_CURSOR_START_CMD)
+            .ok()
+            .filter(|cmd| !cmd.is_empty())
+        else {
+            return false;
+        };
+
+        if let Err(error) = spawn_start_cmd(&start_cmd) {
+            tracing::debug!(?error, "failed to spawn cursor overlay start command");
+            return false;
+        }
+
+        match poll_connect(&self.path) {
+            Some(stream) => {
+                self.cache_stream(stream);
                 true
             }
-            Err(_) => false,
+            None => false,
+        }
+    }
+
+    #[cfg(unix)]
+    fn cache_stream(&mut self, stream: Conn) {
+        let _ = stream.set_write_timeout(Some(Duration::from_millis(WRITE_TIMEOUT_MS)));
+        self.stream = Some(stream);
+    }
+
+    #[cfg(unix)]
+    fn reset_path(&mut self, path: String) {
+        if self.path != path {
+            self.stream = None;
+            self.path = path;
         }
     }
 
@@ -69,16 +119,86 @@ impl OverlayClient {
 }
 
 #[cfg(unix)]
+/// Uses plain Unix socket connect because std exposes no hard connect timeout for UnixStream; local socket connects fail fast, and the budget is applied to subsequent I/O.
+pub(crate) fn try_connect_with_budget(path: &str, budget: Duration) -> std::io::Result<Conn> {
+    let stream = Conn::connect(path)?;
+    let _ = stream.set_read_timeout(Some(budget));
+    let _ = stream.set_write_timeout(Some(budget));
+    Ok(stream)
+}
+
+#[cfg(unix)]
+fn poll_connect(path: &str) -> Option<Conn> {
+    let deadline = Instant::now() + POLL_BUDGET;
+    loop {
+        if let Ok(stream) = try_connect_with_budget(path, POLL_INTERVAL) {
+            return Some(stream);
+        }
+        let now = Instant::now();
+        if now >= deadline {
+            return None;
+        }
+        thread::sleep(std::cmp::min(POLL_INTERVAL, deadline.duration_since(now)));
+    }
+}
+
+#[cfg(unix)]
+fn spawn_start_cmd(start_cmd: &str) -> std::io::Result<()> {
+    bump_spawn_count();
+
+    let mut command = Command::new("sh");
+    command
+        .arg("-c")
+        .arg(start_cmd)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+
+        unsafe {
+            command.pre_exec(|| {
+                let result = libc::setsid();
+                if result == -1 {
+                    return Err(std::io::Error::last_os_error());
+                }
+                Ok(())
+            });
+        }
+    }
+
+    command.spawn().map(|_| ())
+}
+
+#[cfg(any(test, feature = "test-hooks"))]
+fn bump_spawn_count() {
+    use std::sync::atomic::Ordering;
+
+    SPAWN_COUNT.fetch_add(1, Ordering::Relaxed);
+}
+
+#[cfg(not(any(test, feature = "test-hooks")))]
+fn bump_spawn_count() {}
+
+#[cfg(unix)]
 /// Returns the process-global overlay client when socket configuration exists.
 pub fn client() -> Option<&'static Mutex<OverlayClient>> {
-    CLIENT
-        .get_or_init(|| {
-            std::env::var(ENV_VAR)
-                .ok()
-                .filter(|path| !path.is_empty())
-                .map(|path| Mutex::new(OverlayClient::new(path)))
-        })
-        .as_ref()
+    let Some(path) = std::env::var(ENV_VAR).ok().filter(|path| !path.is_empty()) else {
+        if let Some(client) = CLIENT.get() {
+            if let Ok(mut guard) = client.lock() {
+                guard.stream = None;
+            }
+        }
+        return None;
+    };
+
+    let client = CLIENT.get_or_init(|| Mutex::new(OverlayClient::new(path.clone())));
+    if let Ok(mut guard) = client.lock() {
+        guard.reset_path(path);
+    }
+    Some(client)
 }
 
 #[cfg(not(unix))]
@@ -208,8 +328,10 @@ mod tests {
 
     #[test]
     fn send_with_no_socket_drops_silently() {
+        let _g = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         unsafe {
             std::env::remove_var(ENV_VAR);
+            std::env::remove_var(AGENT_CURSOR_START_CMD);
         }
         notify_mouse(&MouseEvent {
             kind: MouseEventKind::Move,
@@ -220,6 +342,11 @@ mod tests {
 
     #[test]
     fn once_lock_lazy_init() {
+        let _g = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        unsafe {
+            std::env::remove_var(ENV_VAR);
+            std::env::remove_var(AGENT_CURSOR_START_CMD);
+        }
         let first = std::thread::spawn(state).join().unwrap();
         let second = std::thread::spawn(state).join().unwrap();
         assert_eq!(first, second);

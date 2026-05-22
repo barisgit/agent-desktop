@@ -1,4 +1,7 @@
 pub mod client;
+/// Serializes lifecycle tests because std::env mutation is process-global.
+#[cfg(all(test, unix))]
+pub(crate) mod lifecycle;
 pub mod protocol;
 pub mod suppress;
 pub mod transport;
