@@ -20,6 +20,7 @@ struct BlueCursorView: View {
         GeometryReader { _ in
             ZStack {
                 Color.clear
+                TargetBoxView(screenFrame: screenFrame)
 
                 let opacity = effectiveOpacity(now: now)
                 let sat = state.thinking ? 1.0 : state.colorSaturation(at: now)
@@ -41,6 +42,10 @@ struct BlueCursorView: View {
                         .position(x: pos.x, y: pos.y)
                         .animation(.spring(response: 0.32, dampingFraction: 0.72), value: target)
                 }
+
+                TypingBubble(screenFrame: screenFrame)
+                ScrollArrowView(screenFrame: screenFrame)
+                ErrorFlashView(screenFrame: screenFrame)
             }
         }
     }

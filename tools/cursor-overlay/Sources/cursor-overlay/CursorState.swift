@@ -23,6 +23,18 @@ struct ClickRipple: Identifiable, Equatable {
     let bornAt: Date
 }
 
+struct ScrollArrowState: Equatable {
+    var point: CGPoint
+    var dx: Double
+    var dy: Double
+}
+
+struct ErrorFlashState: Equatable {
+    var point: CGPoint?
+    var code: String
+    var message: String
+}
+
 final class CursorState: ObservableObject {
     @Published var systemMouse: NSPoint = NSEvent.mouseLocation
     @Published var virtualCursor: CGPoint = NSEvent.mouseLocation
@@ -35,10 +47,10 @@ final class CursorState: ObservableObject {
     @Published var wiggleSeed: Double = 0.0
     @Published var targetPid: Int? = nil
     @Published var targetVisible: Bool = true
-    @Published var typingText: String? = nil
-    @Published var scrollIndicator: (point: CGPoint, dx: Double, dy: Double)? = nil
-    @Published var targetBounds: CGRect? = nil
-    @Published var errorFlash: (code: String, message: String)? = nil
+    @Published var typingBubble: String? = nil
+    @Published var scrollArrow: ScrollArrowState? = nil
+    @Published var targetBox: CGRect? = nil
+    @Published var errorFlash: ErrorFlashState? = nil
 
     func applyMove(_ p: CGPoint, targetPid: Int?) {
         virtualCursor = p
@@ -72,42 +84,37 @@ final class CursorState: ObservableObject {
         thinking = v
     }
 
-    func setTypingText(_ text: String?) {
-        typingText = text
+    func setTypingBubble(_ text: String?) {
+        typingBubble = text
     }
 
-    func clearTypingText() {
-        typingText = nil
+    func clearTypingBubble() {
+        typingBubble = nil
     }
 
-    func setScrollIndicator(point: CGPoint, dx: Double, dy: Double, targetPid: Int?) {
-        scrollIndicator = (point: point, dx: dx, dy: dy)
+    func setScrollArrow(point: CGPoint, dx: Double, dy: Double, targetPid: Int?) {
+        scrollArrow = ScrollArrowState(point: point, dx: dx, dy: dy)
         virtualCursor = point
         hasVirtualCursor = true
         lastMoveAt = Date()
         self.targetPid = targetPid
     }
 
-    func clearScrollIndicator() {
-        scrollIndicator = nil
+    func clearScrollArrow() {
+        scrollArrow = nil
     }
 
-    func setTargetBounds(_ bounds: CGRect, targetPid: Int?) {
-        targetBounds = bounds
+    func setTargetBox(_ bounds: CGRect, targetPid: Int?) {
+        targetBox = bounds
         self.targetPid = targetPid
     }
 
-    func clearTargetBounds() {
-        targetBounds = nil
+    func clearTargetBox() {
+        targetBox = nil
     }
 
     func setErrorFlash(point: CGPoint?, code: String, message: String) {
-        if let point {
-            virtualCursor = point
-            hasVirtualCursor = true
-            lastMoveAt = Date()
-        }
-        errorFlash = (code: code, message: message)
+        errorFlash = ErrorFlashState(point: point, code: code, message: message)
     }
 
     func clearErrorFlash() {

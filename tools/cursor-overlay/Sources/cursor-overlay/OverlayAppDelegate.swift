@@ -9,6 +9,9 @@ final class OverlayAppDelegate: NSObject, NSApplicationDelegate {
     private var deactivateObserver: NSObjectProtocol?
     private var hideObserver: NSObjectProtocol?
     private var socketServer: SocketServer?
+    private var typingClearToken: UInt64 = 0
+    private var scrollClearToken: UInt64 = 0
+    private var errorClearToken: UInt64 = 0
 
     init(args: OverlayArgs) {
         self.args = args
@@ -142,17 +145,23 @@ final class OverlayAppDelegate: NSObject, NSApplicationDelegate {
             refreshVisibilityNow(pid: pid, point: p)
         case .scroll(let x, let y, let dx, let dy, let pid):
             let p = CGPoint(x: x, y: y)
-            cursorState.setScrollIndicator(point: p, dx: dx, dy: dy, targetPid: pid)
+            let token = nextScrollClearToken()
+            cursorState.setScrollArrow(point: p, dx: dx, dy: dy, targetPid: pid)
+            scheduleScrollClear(token: token)
             refreshVisibilityNow(pid: pid, point: p)
         case .key(let text, let combo):
-            cursorState.setTypingText(text ?? combo)
+            let token = nextTypingClearToken()
+            cursorState.setTypingBubble(text ?? combo)
+            scheduleTypingClear(token: token)
         case .targetSet(let x, let y, let w, let h, let pid):
-            cursorState.setTargetBounds(CGRect(x: x, y: y, width: w, height: h), targetPid: pid)
+            cursorState.setTargetBox(CGRect(x: x, y: y, width: w, height: h), targetPid: pid)
         case .targetClear:
-            cursorState.clearTargetBounds()
+            cursorState.clearTargetBox()
         case .error(let x, let y, let code, let message):
-            let point = x.flatMap { xValue in y.map { CGPoint(x: xValue, y: $0) } }
+            let point = x.map { CGPoint(x: $0, y: y ?? 0) }
+            let token = nextErrorClearToken()
             cursorState.setErrorFlash(point: point, code: code, message: message)
+            scheduleErrorClear(token: token)
         case .thinking(let v):
             cursorState.setThinking(v)
         case .setVisible(let v):
@@ -167,5 +176,41 @@ final class OverlayAppDelegate: NSObject, NSApplicationDelegate {
     private func refreshVisibilityNow(pid: Int?, point: CGPoint) {
         let visible = WindowVisibility.isVisible(targetPid: pid, at: point)
         cursorState.setTargetVisible(visible)
+    }
+
+    private func nextTypingClearToken() -> UInt64 {
+        typingClearToken += 1
+        return typingClearToken
+    }
+
+    private func nextScrollClearToken() -> UInt64 {
+        scrollClearToken += 1
+        return scrollClearToken
+    }
+
+    private func nextErrorClearToken() -> UInt64 {
+        errorClearToken += 1
+        return errorClearToken
+    }
+
+    private func scheduleTypingClear(token: UInt64) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
+            guard let self, self.typingClearToken == token else { return }
+            self.cursorState.clearTypingBubble()
+        }
+    }
+
+    private func scheduleScrollClear(token: UInt64) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
+            guard let self, self.scrollClearToken == token else { return }
+            self.cursorState.clearScrollArrow()
+        }
+    }
+
+    private func scheduleErrorClear(token: UInt64) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
+            guard let self, self.errorClearToken == token else { return }
+            self.cursorState.clearErrorFlash()
+        }
     }
 }

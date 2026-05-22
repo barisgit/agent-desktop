@@ -110,10 +110,17 @@ final class SocketServer {
             do {
                 let msg = try ProtocolDecoder.decode(line: line)
                 onMessage(msg)
+            } catch ProtocolDecodeError.unknownKind(let kind) {
+                writeStderr("cursor-overlay: unknownKind: \(kind)\n")
             } catch {
                 fputs("cursor-overlay: decode error: \(error)\n", stderr)
             }
         }
+    }
+
+    private func writeStderr(_ line: String) {
+        guard let data = line.data(using: .utf8) else { return }
+        FileHandle.standardError.write(data)
     }
 
     func stop() {
