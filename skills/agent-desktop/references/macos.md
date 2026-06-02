@@ -86,6 +86,25 @@ Ref commands use `ActionRequest { action, policy }`. The default policy forbids 
 - Explicit focus/physical policy can use the clipboard briefly for non-ASCII text insertion. Use `set-value` for sensitive text when possible.
 - If a command would need a forbidden physical path, it returns a structured error with a recovery hint.
 
+### Background Key Delivery and the Key-Window Boundary
+
+Headless key presses (`press --target-pid`/`--window-id --policy headless`) post events to the target **process**; the OS routes them to that process's **key window** (the window that was active when the app was last frontmost). This has a hard boundary, verified on macOS 26 Tahoe:
+
+| Case | Result |
+|------|--------|
+| Single-window backgrounded app | Keys commit, no focus steal |
+| Multi-window app, target **is** the key window | Keys commit, no focus steal |
+| Multi-window app, target is a **non-key** sibling window | `press --window-id` returns `ACTION_FAILED` naming the real key window |
+
+This is an OS limit, not a tool gap: macOS lets only the frontmost app own a key window, and AX focus writes (`AXFocused`/`AXFocusedWindow`) to a non-frontmost app's window are silently ignored on Tahoe. No third-party API delivers a committing keystroke to a specific non-key background window without activating the app (which steals focus). Codex Computer Use and BCU hit the same wall.
+
+**What still works for any window, including non-key:** per-element AX commands (`set-value`, `click`, `focus`, `select`, `toggle`) reach the element directly via the accessibility API, flash-free. They set values and press controls anywhere; they just are not real keystrokes, so they cannot commit an omnibox `Return` in a non-key window.
+
+**Recovery when `press --window-id` refuses:**
+1. Drive the control with an AX command instead of a keystroke (e.g. `set-value` the field, `click` the submit button).
+2. Or `focus-window` the target window first (accepts a visible focus change), then press.
+3. For a browser omnibox in a window that IS key/only: `set-value <omnibox-ref> "https://..."` then `press return --window-id <w> --policy headless` commits navigation with no focus steal. The omnibox is native chrome (`NSTextField`), so the keystroke reaches it; this does not apply to keystrokes aimed at web content.
+
 ### Surfaces
 
 macOS apps can have multiple accessibility surfaces:

@@ -249,12 +249,13 @@ agent-desktop skills get desktop --full         # Load this skill + all referenc
 2. **Use `-i --compact` flags.** Filters to interactive elements and collapses empty wrappers, minimizing tokens.
 3. **Refs are snapshot-scoped.** Keep `snapshot_id` for deterministic multi-step use; re-drill the affected region after any UI-changing action. Scoped invalidation keeps other refs intact.
 4. **Prefer refs over coordinates.** `click @e5` > `agent-desktop --headed mouse-click --xy 500,300`.
-5. **Use `wait` for async UI.** After launch/dialog triggers, wait for expected state.
-6. **Check permissions first.** Run `permissions` on first use; screenshots also need Screen Recording.
-7. **Handle errors.** Branch on `error.code` only — `error.message` and `error.suggestion` text is informational and may change between versions.
-8. **Use `find` for targeted searches.** Faster than any snapshot when you know role/name.
-9. **Use surfaces for overlays.** `snapshot --surface menu` for menus, `--surface sheet` for dialogs. Never `--skeleton` for surfaces — they're already focused.
-10. **Batch for performance.** Multiple commands in one invocation.
-11. **Headless by default.** Ref actions use semantic AX paths and block silent focus stealing, cursor movement, keyboard synthesis, and pasteboard insertion. Use explicit `focus`, `press`, `hover`, `drag`, or `mouse-*` commands only when physical/headed interaction is intended.
-12. **Start a session once per run.** `session start` enables automatic tracing and relocates the latest-snapshot namespace. Use `AGENT_DESKTOP_SESSION` for concurrent independent agents; use `--session <id>` to override the active pointer for a single command.
-13. **Trace hard failures.** With an active trace-enabled session, segments are written automatically. Add `--trace /tmp/agent-desktop.jsonl` only when you need a single override file (CI, one-offs). Check `status` when unsure whether tracing is active.
+5. **Use explicit targets for headless keys.** Prefer `press ... --window-id w-48 --policy headless` when a window id is known; use `--target-pid` when only the process is known. Headless key delivery only reaches a backgrounded app's key window. For a multi-window app, targeting another window returns `ACTION_FAILED` naming the key window. Use AX commands such as `set-value`, `click`, or `focus` for any window, or focus the target window first.
+6. **Use `wait` for async UI.** After launch/dialog triggers, wait for expected state.
+7. **Check permissions first.** Run `permissions` on first use; screenshots also need Screen Recording.
+8. **Handle errors.** Branch on `error.code` only — `error.message` and `error.suggestion` text is informational and may change between versions.
+9. **Use `find` for targeted searches.** Faster than any snapshot when you know role/name.
+10. **Use surfaces for overlays.** `snapshot --surface menu` for menus, `--surface sheet` for dialogs. Never `--skeleton` for surfaces — they're already focused.
+11. **Batch for performance.** Multiple commands in one invocation.
+12. **Headless by default.** Ref actions use semantic AX paths and block silent focus stealing, cursor movement, keyboard synthesis, and pasteboard insertion. Use explicit `focus`, `press`, `hover`, `drag`, or `mouse-*` commands only when physical/headed interaction is intended.
+13. **Start a session once per run.** `session start` enables automatic tracing and relocates the latest-snapshot namespace. Use `AGENT_DESKTOP_SESSION` for concurrent independent agents; use `--session <id>` to override the active pointer for a single command.
+14. **Trace hard failures.** With an active trace-enabled session, segments are written automatically. Add `--trace /tmp/agent-desktop.jsonl` only when you need a single override file (CI, one-offs). Check `status` when unsure whether tracing is active.

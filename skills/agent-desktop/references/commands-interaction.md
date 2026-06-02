@@ -200,6 +200,8 @@ agent-desktop press cmd+a --app "TextEdit"
 |------|-------------|
 | `--app` | Target application (focuses app before pressing) |
 
+Headless key delivery reaches only a backgrounded app's **key window**. If `--window-id` names a non-key sibling of a multi-window app, the command returns `ACTION_FAILED` with the real key window. This is an OS limit on macOS (only the frontmost app owns a key window). Recover by driving the control with an AX command (`set-value`/`click`/`focus`, which reach any window) or `focus-window` the target first. See `macos.md` → Background Key Delivery and the Key-Window Boundary.
+
 **Key names:** `return`, `escape`, `tab`, `space`, `delete`, `up`, `down`, `left`, `right`, `f1`-`f12`
 **Modifiers:** `cmd`, `ctrl`, `alt`, `shift` — combine with `+`
 
