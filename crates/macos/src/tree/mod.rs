@@ -8,6 +8,7 @@ pub mod capabilities;
 pub mod element;
 pub mod element_bounds;
 pub(crate) mod element_dedupe;
+pub mod hit_test;
 pub(crate) mod node_attrs;
 pub mod resolve;
 mod resolve_bounds;
@@ -25,10 +26,11 @@ pub(crate) use attributes::{
 };
 pub use ax_element::AXElement;
 pub use build_context::TreeBuildContext;
-pub use builder::{build_subtree, window_element_for};
+pub use builder::{build_subtree, window_element_for, window_element_for_id};
 pub use capabilities::same_element;
-pub use element::{element_for_pid, resolve_element_name};
+pub use element::{element_for_pid, enable_enhanced_accessibility, resolve_element_name};
 pub use element_bounds::read_bounds;
+pub use hit_test::hit_test_at_position;
 pub(crate) use node_attrs::NodeAttrs;
 pub use surfaces::{
     alert_for_pid, focused_surface_for_pid, menu_element_for_pid, menubar_for_pid, popover_for_pid,

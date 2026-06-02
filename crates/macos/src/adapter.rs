@@ -1,11 +1,11 @@
 use agent_desktop_core::{
     PermissionReport,
-    action::{DragParams, MouseEvent, WindowOp},
+    action::{DragParams, MouseEvent, Point, WindowOp},
     action_request::ActionRequest,
     action_result::ActionResult,
     adapter::{
-        ImageBuffer, LiveElement, NativeHandle, PlatformAdapter, ScreenshotTarget, SnapshotSurface,
-        TreeOptions, WindowFilter,
+        HitTestResult, ImageBuffer, LiveElement, NativeHandle, PlatformAdapter, ScreenshotTarget,
+        SnapshotSurface, TreeOptions, WindowFilter,
     },
     element_state::ElementState,
     error::AdapterError,
@@ -47,8 +47,12 @@ impl PlatformAdapter for MacOSAdapter {
         win: &WindowInfo,
         opts: &TreeOptions,
     ) -> Result<AccessibilityNode, AdapterError> {
+        crate::tree::enable_enhanced_accessibility(win.pid);
         let el = match opts.surface {
-            SnapshotSurface::Window => crate::tree::window_element_for(win.pid, &win.title),
+            SnapshotSurface::Window => {
+                let window_number = win.id.strip_prefix("w-").and_then(|id| id.parse().ok());
+                crate::tree::window_element_for_id(win.pid, window_number, &win.title)
+            }
             SnapshotSurface::Focused => crate::tree::surfaces::focused_surface_for_pid(win.pid)
                 .ok_or_else(|| AdapterError::internal("No focused surface found"))?,
             SnapshotSurface::Menu => crate::tree::surfaces::menu_element_for_pid(win.pid)
@@ -83,6 +87,14 @@ impl PlatformAdapter for MacOSAdapter {
         request: ActionRequest,
     ) -> Result<ActionResult, AdapterError> {
         execute_action_impl(handle, request)
+    }
+
+    fn execute_ax_only_action(
+        &self,
+        handle: &NativeHandle,
+        request: ActionRequest,
+    ) -> Result<ActionResult, AdapterError> {
+        execute_ax_only_action_impl(handle, request)
     }
 
     fn resolve_element_strict(&self, entry: &RefEntry) -> Result<NativeHandle, AdapterError> {
@@ -162,6 +174,43 @@ impl PlatformAdapter for MacOSAdapter {
         combo: &agent_desktop_core::action::KeyCombo,
     ) -> Result<ActionResult, AdapterError> {
         crate::system::key_dispatch::press_for_app_impl(app_name, combo)
+    }
+
+    fn press_key_for_pid(
+        &self,
+        pid: i32,
+        combo: &agent_desktop_core::action::KeyCombo,
+        steal_focus: bool,
+    ) -> Result<ActionResult, AdapterError> {
+        crate::system::key_dispatch::press_for_pid_impl(pid, combo, steal_focus)
+    }
+
+    fn press_key_for_window(
+        &self,
+        window: &WindowInfo,
+        combo: &agent_desktop_core::action::KeyCombo,
+        steal_focus: bool,
+    ) -> Result<ActionResult, AdapterError> {
+        let window_number = window.id.strip_prefix("w-").and_then(|id| id.parse().ok());
+        crate::system::key_dispatch::press_for_pid_with_window_impl(
+            window.pid,
+            window_number,
+            combo,
+            steal_focus,
+        )
+    }
+
+    fn press_key_at_element(
+        &self,
+        handle: &NativeHandle,
+        combo: &agent_desktop_core::action::KeyCombo,
+    ) -> Result<ActionResult, AdapterError> {
+        use crate::tree::AXElement;
+        use std::mem::ManuallyDrop;
+        let element = ManuallyDrop::new(AXElement(
+            handle.as_raw() as accessibility_sys::AXUIElementRef
+        ));
+        crate::system::key_dispatch::press_at_element_impl(&element, combo)
     }
 
     fn wait_for_menu(&self, pid: i32, open: bool, timeout_ms: u64) -> Result<(), AdapterError> {
@@ -320,6 +369,14 @@ impl PlatformAdapter for MacOSAdapter {
         crate::notifications::actions::notification_action(index, identity, action_name)
     }
 
+    fn hit_test_at_position(
+        &self,
+        point: Point,
+        target_pid: Option<i32>,
+    ) -> Result<Option<HitTestResult>, AdapterError> {
+        crate::tree::hit_test_at_position(point, target_pid)
+    }
+
     fn get_subtree(
         &self,
         handle: &NativeHandle,
@@ -353,6 +410,37 @@ fn execute_action_impl(
     request: ActionRequest,
 ) -> Result<ActionResult, AdapterError> {
     with_borrowed_ax_element(handle, |el| crate::actions::perform_action(el, &request))
+}
+
+fn execute_ax_only_action_impl(
+    handle: &NativeHandle,
+    request: ActionRequest,
+) -> Result<ActionResult, AdapterError> {
+    use crate::actions::{chain::ChainContext, chain::execute_chain, chain_defs, discovery};
+    use agent_desktop_core::{action::Action, error::ErrorCode};
+
+    with_borrowed_ax_element(handle, |element| {
+        let chain = match request.action {
+            Action::Click => &chain_defs::CLICK_CHAIN,
+            Action::RightClick => &chain_defs::RIGHT_CLICK_CHAIN,
+            _ => {
+                return Err(AdapterError::new(
+                    ErrorCode::ActionNotSupported,
+                    "AX-only execution supports only click and right-click",
+                ));
+            }
+        };
+        let capabilities = discovery::discover(element);
+        let context = ChainContext {
+            dynamic_value: None,
+            deadline: None,
+        };
+        execute_chain(element, &capabilities, chain, &context, request.policy)?;
+        Ok(ActionResult::new(match request.action {
+            Action::RightClick => "right_click",
+            _ => "click",
+        }))
+    })
 }
 
 #[cfg(target_os = "macos")]

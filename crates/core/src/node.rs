@@ -52,6 +52,14 @@ fn f64_or_zero<'de, D: Deserializer<'de>>(deserializer: D) -> Result<f64, D::Err
 }
 
 impl Rect {
+    pub fn contains_point(&self, x: f64, y: f64) -> bool {
+        x >= self.x && x < self.x + self.width && y >= self.y && y < self.y + self.height
+    }
+
+    pub fn area(&self) -> f64 {
+        self.width.max(0.0) * self.height.max(0.0)
+    }
+
     pub fn bounds_hash(&self) -> u64 {
         use rustc_hash::FxHasher;
         use std::hash::{Hash, Hasher};

@@ -177,10 +177,17 @@ fn dispatch_inner(
         Commands::Press(a) => press::execute(
             press::PressArgs {
                 combo: a.combo,
+                ref_id: a.ref_id,
+                snapshot: a.snapshot,
+                window_id: a.window_id,
                 app: a.app,
+                target_app: a.target_app,
+                target_pid: a.target_pid,
+                policy: a.policy.to_core(),
                 force: a.force,
             },
             adapter,
+            context,
         ),
 
         Commands::KeyDown(a) => key_down::execute(

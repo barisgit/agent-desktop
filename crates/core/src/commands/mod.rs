@@ -19,6 +19,7 @@ pub mod focus;
 pub mod focus_window;
 pub mod get;
 pub mod helpers;
+pub mod hit_test_lookup;
 pub mod hover;
 pub mod is_check;
 pub mod key_down;

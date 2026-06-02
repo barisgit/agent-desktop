@@ -7,28 +7,59 @@ use agent_desktop_core::{action::Modifier, adapter::WindowFilter};
 pub fn press_for_app_impl(app_name: &str, combo: &KeyCombo) -> Result<ActionResult, AdapterError> {
     tracing::debug!("system: press_for_app app={app_name:?} key={:?}", combo.key);
     let pid = find_pid_by_name(app_name)?;
+    press_for_pid_impl(pid, combo, true)
+}
+
+#[cfg(target_os = "macos")]
+pub fn press_for_pid_impl(
+    pid: i32,
+    combo: &KeyCombo,
+    steal_focus: bool,
+) -> Result<ActionResult, AdapterError> {
+    press_for_pid_with_window_impl(pid, None, combo, steal_focus)
+}
+
+#[cfg(target_os = "macos")]
+pub fn press_for_pid_with_window_impl(
+    pid: i32,
+    window_number: Option<u32>,
+    combo: &KeyCombo,
+    steal_focus: bool,
+) -> Result<ActionResult, AdapterError> {
     let app_el = crate::tree::element_for_pid(pid);
     if app_el.0.is_null() {
         return Err(AdapterError::internal("Failed to create AX app element"));
     }
 
-    if let Err(err) = crate::system::app_ops::ensure_app_focused(pid) {
-        tracing::debug!("press_for_app: focus before key dispatch failed: {err}");
-    }
+    if steal_focus {
+        if let Err(err) = crate::system::app_ops::ensure_app_focused(pid) {
+            tracing::debug!("press_for_pid: focus before key dispatch failed: {err}");
+        }
 
-    if !combo.modifiers.is_empty() {
-        if let Some(result) = try_menu_bar_shortcut(&app_el, combo) {
+        if !combo.modifiers.is_empty()
+            && let Some(result) = try_menu_bar_shortcut(&app_el, combo)
+        {
             return result;
         }
+
+        if let Some(result) = try_simple_key_action(app_el.0, combo) {
+            return result;
+        }
+
+        ax_post_keyboard_event(app_el.0, combo)?;
+        return Ok(ActionResult::new("press_key"));
     }
 
-    let simple_result = try_simple_key_action(app_el.0, combo);
-    if let Some(result) = simple_result {
-        return result;
+    if let Some(window_number) =
+        window_number.or_else(|| crate::system::cg_window::find_cg_window_id_for_pid(pid))
+    {
+        let preflight = crate::system::skylight::preflight_window(pid, window_number);
+        tracing::debug!(
+            "press_for_pid headless preflight pid={pid} window={window_number} ok={preflight}"
+        );
     }
-
-    ax_post_keyboard_event(app_el.0, combo)?;
-    Ok(ActionResult::new("press_key".to_string()))
+    crate::input::cg_keyboard::post_combo_to_pid(combo, pid)?;
+    Ok(ActionResult::new("press_key"))
 }
 
 #[cfg(target_os = "macos")]
@@ -216,6 +247,43 @@ fn key_to_keycode(key: &str) -> Option<u16> {
         "cmd" | "command" | "shift" | "alt" | "option" | "ctrl" | "control" => None,
         other => crate::input::keyboard_map::key_name_to_code(other).ok(),
     }
+}
+
+#[cfg(target_os = "macos")]
+pub fn press_at_element_impl(
+    element: &crate::tree::AXElement,
+    combo: &KeyCombo,
+) -> Result<ActionResult, AdapterError> {
+    use accessibility_sys::{AXUIElementPerformAction, kAXErrorSuccess};
+    use core_foundation::{base::TCFType, string::CFString};
+
+    if combo.modifiers.is_empty() {
+        let action_name = match combo.key.as_str() {
+            "return" | "enter" => Some("AXConfirm"),
+            "escape" | "esc" => Some("AXCancel"),
+            "space" => Some("AXPress"),
+            _ => None,
+        };
+        if let Some(action_name) = action_name {
+            let action = CFString::new(action_name);
+            let result =
+                unsafe { AXUIElementPerformAction(element.0, action.as_concrete_TypeRef()) };
+            if result == kAXErrorSuccess {
+                return Ok(ActionResult::new("press_key"));
+            }
+        }
+    }
+
+    let pid = crate::system::app_ops::pid_from_element(element)
+        .ok_or_else(|| AdapterError::internal("Could not determine pid for key delivery"))?;
+    let app = crate::tree::element_for_pid(pid);
+    if app.0.is_null() {
+        return Err(AdapterError::internal(
+            "Failed to create AX app element for key delivery",
+        ));
+    }
+    ax_post_keyboard_event(app.0, combo)?;
+    Ok(ActionResult::new("press_key"))
 }
 
 #[cfg(target_os = "macos")]

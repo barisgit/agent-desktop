@@ -1,6 +1,6 @@
 use super::*;
 use crate::cli::{Cli, Commands};
-use crate::cli_args::{RefArgs, RefClickArgs, ScreenshotArgs, SnapshotArgs};
+use crate::cli_args::{RefClickArgs, ScreenshotArgs, SnapshotArgs};
 use agent_desktop_core::{PermissionReport, PermissionState};
 use clap::CommandFactory;
 
@@ -123,6 +123,7 @@ fn accessibility_denial_is_preflighted_for_ax_commands() {
     let command = Commands::Click(RefClickArgs {
         ref_id: VALID_REF_ID.into(),
         snapshot_id: None,
+        window_id: None,
         policy: crate::cli_args::actions::InteractionPolicyArg::Headless,
     });
 
@@ -144,6 +145,7 @@ fn invalid_ref_args_are_rejected_before_permission_preflight() {
     let command = Commands::Click(RefClickArgs {
         ref_id: "bad-ref".into(),
         snapshot_id: None,
+        window_id: None,
         policy: crate::cli_args::actions::InteractionPolicyArg::Headless,
     });
 

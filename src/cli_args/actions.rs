@@ -5,6 +5,10 @@ fn default_scroll_amount() -> u32 {
     3
 }
 
+fn press_policy_default() -> InteractionPolicyArg {
+    InteractionPolicyArg::Headless
+}
+
 fn default_mouse_button() -> String {
     "left".to_string()
 }
@@ -48,6 +52,12 @@ pub(crate) struct TypeArgs {
         help = "Snapshot ID returned by snapshot; omit to use active session latest"
     )]
     pub snapshot: Option<String>,
+    #[arg(
+        long = "window-id",
+        help = "Accepted for script ergonomics; refs already identify their window"
+    )]
+    #[serde(default, rename = "window-id", alias = "window_id")]
+    pub window_id: Option<String>,
     #[arg(value_name = "TEXT", allow_hyphen_values = true, help = "Text to type")]
     pub text: String,
 }
@@ -63,6 +73,12 @@ pub(crate) struct SetValueArgs {
         help = "Snapshot ID returned by snapshot; omit to use active session latest"
     )]
     pub snapshot: Option<String>,
+    #[arg(
+        long = "window-id",
+        help = "Accepted for script ergonomics; refs already identify their window"
+    )]
+    #[serde(default, rename = "window-id", alias = "window_id")]
+    pub window_id: Option<String>,
     #[arg(
         value_name = "VALUE",
         allow_hyphen_values = true,
@@ -117,8 +133,46 @@ pub(crate) struct PressArgs {
         help = "Key combo: return, escape, cmd+c, shift+tab ..."
     )]
     pub combo: String,
+    #[arg(
+        value_name = "REF",
+        help = "Element ref to deliver the press to; overrides app and pid targets"
+    )]
+    #[serde(default, rename = "ref", alias = "ref_id")]
+    pub ref_id: Option<String>,
+    #[arg(long, help = "Snapshot ID returned by snapshot; omit to use latest")]
+    #[serde(default)]
+    pub snapshot: Option<String>,
+    #[arg(
+        long = "window-id",
+        help = "Target a specific window id for key delivery",
+        conflicts_with_all = ["app", "target_app", "target_pid"]
+    )]
+    #[serde(default, rename = "window-id", alias = "window_id")]
+    pub window_id: Option<String>,
     #[arg(long, help = "Target application name (focuses app before pressing)")]
     pub app: Option<String>,
+    #[arg(
+        long = "target-app",
+        help = "Target application name for headless key delivery",
+        conflicts_with_all = ["app", "target_pid"]
+    )]
+    #[serde(default, rename = "target-app", alias = "target_app")]
+    pub target_app: Option<String>,
+    #[arg(
+        long = "target-pid",
+        help = "Target application PID for headless key delivery",
+        conflicts_with_all = ["app", "target_app"]
+    )]
+    #[serde(default, rename = "target-pid", alias = "target_pid")]
+    pub target_pid: Option<i32>,
+    #[arg(
+        long,
+        value_enum,
+        default_value_t = InteractionPolicyArg::Headless,
+        help = "Interaction policy: headless (default), focus-fallback, physical"
+    )]
+    #[serde(default = "press_policy_default")]
+    pub policy: InteractionPolicyArg,
     #[arg(
         long,
         help = "Send the combo even if the adapter flags it as a dangerous shortcut"

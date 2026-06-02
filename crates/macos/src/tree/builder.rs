@@ -19,9 +19,42 @@ use accessibility_sys::{
 
 #[cfg(target_os = "macos")]
 pub fn window_element_for(pid: i32, win_title: &str) -> AXElement {
+    window_element_for_id(pid, None, win_title)
+}
+
+#[cfg(target_os = "macos")]
+unsafe extern "C" {
+    fn _AXUIElementGetWindow(
+        element: accessibility_sys::AXUIElementRef,
+        out_window_id: *mut u32,
+    ) -> accessibility_sys::AXError;
+}
+
+#[cfg(target_os = "macos")]
+fn ax_cg_window_id(element: &AXElement) -> Option<u32> {
+    let mut window_id = 0;
+    let result = unsafe { _AXUIElementGetWindow(element.0, &mut window_id) };
+    (result == accessibility_sys::kAXErrorSuccess && window_id != 0).then_some(window_id)
+}
+
+#[cfg(target_os = "macos")]
+pub fn window_element_for_id(pid: i32, window_number: Option<i64>, win_title: &str) -> AXElement {
     let app = element_for_pid(pid);
 
     if let Some(windows) = copy_ax_array(&app, kAXWindowsAttribute) {
+        if let Some(target) = window_number {
+            let target_u32 = u32::try_from(target).ok();
+            for window in &windows {
+                if target_u32.is_some() && ax_cg_window_id(window) == target_u32 {
+                    return window.clone();
+                }
+            }
+            for window in &windows {
+                if super::copy_i64_attr(window, "AXWindowNumber") == Some(target) {
+                    return window.clone();
+                }
+            }
+        }
         let mut first_candidate = None;
         let mut child_candidate = None;
         let mut partial_candidate = None;

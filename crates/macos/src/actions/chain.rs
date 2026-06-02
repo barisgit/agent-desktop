@@ -179,9 +179,7 @@ mod imp {
             }
 
             ChainStep::FocusThenSetDynamic { attr } => {
-                if !policy.allow_focus_steal {
-                    return Ok(false);
-                }
+                let _ = policy;
                 let value = match ctx.dynamic_value {
                     Some(v) => v,
                     None => return Ok(false),

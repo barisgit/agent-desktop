@@ -335,6 +335,28 @@ pub(crate) fn window_op_command(
     Ok(json!({ response_key: true }))
 }
 
+pub fn find_window_for_pid(
+    pid: i32,
+    adapter: &dyn PlatformAdapter,
+) -> Result<WindowInfo, AppError> {
+    window_lookup::find_window_for_pid(pid, adapter)
+}
+
+pub fn resolve_window_by_id(
+    window_id: &str,
+    adapter: &dyn PlatformAdapter,
+) -> Result<WindowInfo, AppError> {
+    let filter = WindowFilter {
+        focused_only: false,
+        app: None,
+    };
+    adapter
+        .list_windows(&filter)?
+        .into_iter()
+        .find(|window| window.id == window_id)
+        .ok_or_else(|| AppError::invalid_input(format!("Window '{window_id}' not found")))
+}
+
 pub(crate) fn resolve_window_for_app(
     app: Option<&str>,
     adapter: &dyn PlatformAdapter,

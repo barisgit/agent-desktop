@@ -29,10 +29,11 @@ mod imp {
     };
     use accessibility_sys::{
         AXUIElementCopyMultipleAttributeValues, AXUIElementCreateApplication,
-        AXUIElementGetAttributeValueCount, AXUIElementSetMessagingTimeout, AXValueGetValue,
-        kAXDescriptionAttribute, kAXEnabledAttribute, kAXErrorSuccess, kAXPositionAttribute,
-        kAXRoleAttribute, kAXSizeAttribute, kAXTitleAttribute, kAXValueAttribute,
-        kAXValueTypeCGPoint, kAXValueTypeCGSize,
+        AXUIElementGetAttributeValueCount, AXUIElementSetAttributeValue,
+        AXUIElementSetMessagingTimeout, AXValueGetValue, kAXDescriptionAttribute,
+        kAXEnabledAttribute, kAXErrorSuccess, kAXPositionAttribute, kAXRoleAttribute,
+        kAXSizeAttribute, kAXTitleAttribute, kAXValueAttribute, kAXValueTypeCGPoint,
+        kAXValueTypeCGSize,
     };
     use core_foundation::{
         array::CFArray,
@@ -51,6 +52,30 @@ mod imp {
             unsafe { AXUIElementSetMessagingTimeout(el.0, 2.0) };
         }
         el
+    }
+
+    pub fn enable_enhanced_accessibility(pid: i32) -> bool {
+        let app = element_for_pid(pid);
+        if app.0.is_null() {
+            return false;
+        }
+        let manual = CFString::new("AXManualAccessibility");
+        let accepted = unsafe {
+            AXUIElementSetAttributeValue(
+                app.0,
+                manual.as_concrete_TypeRef(),
+                CFBoolean::true_value().as_CFTypeRef(),
+            )
+        } == kAXErrorSuccess;
+        let enhanced = CFString::new("AXEnhancedUserInterface");
+        unsafe {
+            AXUIElementSetAttributeValue(
+                app.0,
+                enhanced.as_concrete_TypeRef(),
+                CFBoolean::true_value().as_CFTypeRef(),
+            );
+        }
+        accepted
     }
 
     pub fn fetch_node_attrs(el: &AXElement) -> NodeAttrs {
@@ -243,6 +268,10 @@ mod imp {
         AXElement(std::ptr::null())
     }
 
+    pub fn enable_enhanced_accessibility(_pid: i32) -> bool {
+        false
+    }
+
     pub fn count_children(_element: &AXElement, _ax_role: Option<&str>) -> u32 {
         0
     }
@@ -256,4 +285,7 @@ mod imp {
     }
 }
 
-pub use imp::{count_children, element_for_pid, fetch_node_attrs, resolve_element_name};
+pub use imp::{
+    count_children, element_for_pid, enable_enhanced_accessibility, fetch_node_attrs,
+    resolve_element_name,
+};

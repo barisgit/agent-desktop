@@ -4,6 +4,7 @@ use crate::action_request::ActionRequest;
 use crate::action_result::ActionResult;
 use crate::adapter::{NativeHandle, PlatformAdapter};
 use crate::error::AdapterError;
+use crate::{CommandContext, InteractionPolicy};
 
 struct BlockingAdapter;
 
@@ -36,14 +37,25 @@ impl PlatformAdapter for AllowingAdapter {
 fn args(combo: &str, force: bool) -> PressArgs {
     PressArgs {
         combo: combo.to_owned(),
+        ref_id: None,
+        snapshot: None,
+        window_id: None,
         app: None,
+        target_app: None,
+        target_pid: None,
+        policy: InteractionPolicy::headed(),
         force,
     }
 }
 
 #[test]
 fn adapter_blocked_combo_is_refused_when_not_forced() {
-    let err = execute(args("cmd+q", false), &BlockingAdapter).unwrap_err();
+    let err = execute(
+        args("cmd+q", false),
+        &BlockingAdapter,
+        &CommandContext::default(),
+    )
+    .unwrap_err();
     assert_eq!(err.code(), "POLICY_DENIED");
     assert!(
         err.to_string().contains("--force"),
@@ -53,12 +65,20 @@ fn adapter_blocked_combo_is_refused_when_not_forced() {
 
 #[test]
 fn force_bypasses_the_adapter_block() {
-    execute(args("cmd+q", true), &BlockingAdapter)
-        .expect("--force must let the agent send a blocked combo");
+    execute(
+        args("cmd+q", true),
+        &BlockingAdapter,
+        &CommandContext::default(),
+    )
+    .expect("--force must let the agent send a blocked combo");
 }
 
 #[test]
 fn core_blocks_nothing_by_default() {
-    execute(args("cmd+q", false), &AllowingAdapter)
-        .expect("core must not hardcode any block; the default adapter allows everything");
+    execute(
+        args("cmd+q", false),
+        &AllowingAdapter,
+        &CommandContext::default(),
+    )
+    .expect("core must not hardcode any block; the default adapter allows everything");
 }

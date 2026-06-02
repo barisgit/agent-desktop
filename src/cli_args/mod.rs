@@ -230,6 +230,12 @@ pub(crate) struct RefClickArgs {
     #[serde(rename = "snapshot", alias = "snapshot_id")]
     pub snapshot_id: Option<String>,
     #[arg(
+        long = "window-id",
+        help = "Accepted for script ergonomics; refs already identify their window"
+    )]
+    #[serde(default, rename = "window-id", alias = "window_id")]
+    pub window_id: Option<String>,
+    #[arg(
         long,
         value_enum,
         default_value_t = crate::cli_args::actions::InteractionPolicyArg::Headless,

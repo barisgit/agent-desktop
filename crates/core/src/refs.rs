@@ -92,6 +92,10 @@ impl RefMap {
         self.inner.get(ref_id)
     }
 
+    pub fn iter(&self) -> std::collections::hash_map::Iter<'_, String, RefEntry> {
+        self.inner.iter()
+    }
+
     pub fn len(&self) -> usize {
         self.inner.len()
     }

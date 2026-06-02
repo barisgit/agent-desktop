@@ -9,6 +9,7 @@ pub mod permissions;
 pub(crate) mod process;
 pub(crate) mod process_apps;
 pub mod screenshot;
+pub mod skylight;
 pub mod wait;
 pub(crate) mod window_inventory;
 pub mod window_list;

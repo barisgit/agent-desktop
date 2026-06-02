@@ -1,6 +1,6 @@
 use crate::{
     PermissionReport, PermissionState,
-    action::{DragParams, KeyCombo, MouseEvent, WindowOp},
+    action::{DragParams, KeyCombo, MouseEvent, Point, WindowOp},
     action_request::ActionRequest,
     action_result::ActionResult,
     element_state::ElementState,
@@ -10,6 +10,16 @@ use crate::{
     refs::RefEntry,
 };
 use std::marker::PhantomData;
+
+pub struct HitTestResult {
+    pub handle: NativeHandle,
+    pub role: String,
+    pub name: Option<String>,
+    pub bounds: Option<Rect>,
+    pub bounds_hash: Option<u64>,
+    pub available_actions: Vec<String>,
+    pub pid: Option<i32>,
+}
 
 pub struct WindowFilter {
     pub focused_only: bool,
@@ -177,6 +187,14 @@ pub trait PlatformAdapter: Send + Sync {
         Err(AdapterError::not_supported("execute_action"))
     }
 
+    fn execute_ax_only_action(
+        &self,
+        _handle: &NativeHandle,
+        _request: ActionRequest,
+    ) -> Result<ActionResult, AdapterError> {
+        Err(AdapterError::not_supported("execute_ax_only_action"))
+    }
+
     fn resolve_element_strict(&self, _entry: &RefEntry) -> Result<NativeHandle, AdapterError> {
         Err(AdapterError::not_supported("resolve_element_strict"))
     }
@@ -313,6 +331,32 @@ pub trait PlatformAdapter: Send + Sync {
         Err(AdapterError::not_supported("press_key_for_app"))
     }
 
+    fn press_key_for_pid(
+        &self,
+        _pid: i32,
+        _combo: &KeyCombo,
+        _steal_focus: bool,
+    ) -> Result<ActionResult, AdapterError> {
+        Err(AdapterError::not_supported("press_key_for_pid"))
+    }
+
+    fn press_key_for_window(
+        &self,
+        window: &WindowInfo,
+        combo: &KeyCombo,
+        steal_focus: bool,
+    ) -> Result<ActionResult, AdapterError> {
+        self.press_key_for_pid(window.pid, combo, steal_focus)
+    }
+
+    fn press_key_at_element(
+        &self,
+        _handle: &NativeHandle,
+        _combo: &KeyCombo,
+    ) -> Result<ActionResult, AdapterError> {
+        Err(AdapterError::not_supported("press_key_at_element"))
+    }
+
     fn wait_for_menu(&self, _pid: i32, _open: bool, _timeout_ms: u64) -> Result<(), AdapterError> {
         Err(AdapterError::not_supported("wait_for_menu"))
     }
@@ -411,5 +455,13 @@ pub trait PlatformAdapter: Send + Sync {
         _opts: &TreeOptions,
     ) -> Result<AccessibilityNode, AdapterError> {
         Err(AdapterError::not_supported("get_subtree"))
+    }
+
+    fn hit_test_at_position(
+        &self,
+        _point: Point,
+        _target_pid: Option<i32>,
+    ) -> Result<Option<HitTestResult>, AdapterError> {
+        Err(AdapterError::not_supported("hit_test_at_position"))
     }
 }
