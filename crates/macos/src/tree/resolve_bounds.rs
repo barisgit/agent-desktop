@@ -5,9 +5,18 @@ use super::AXElement;
 pub(super) fn bounds_match(el: &AXElement, entry: &RefEntry) -> bool {
     match entry.bounds_hash {
         Some(expected) => {
-            let actual = crate::tree::read_bounds(el).map(|b| b.bounds_hash());
-            actual.map(|h| h == expected).unwrap_or(false)
+            let actual = crate::tree::read_bounds(el).map(|bounds| bounds.bounds_hash());
+            actual.is_some_and(|actual| actual == expected)
         }
+        None => true,
+    }
+}
+
+pub(super) fn bounds_overlap_or_accept(el: &AXElement, entry: &RefEntry) -> bool {
+    match entry.bounds.as_ref() {
+        Some(target) => crate::tree::read_bounds(el)
+            .map(|candidate| rects_overlap(&candidate, target))
+            .unwrap_or(true),
         None => true,
     }
 }

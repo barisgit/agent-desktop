@@ -31,7 +31,7 @@ unsafe extern "C" {
 }
 
 #[cfg(target_os = "macos")]
-fn ax_cg_window_id(element: &AXElement) -> Option<u32> {
+pub fn ax_cg_window_id(element: &AXElement) -> Option<u32> {
     let mut window_id = 0;
     let result = unsafe { _AXUIElementGetWindow(element.0, &mut window_id) };
     (result == accessibility_sys::kAXErrorSuccess && window_id != 0).then_some(window_id)

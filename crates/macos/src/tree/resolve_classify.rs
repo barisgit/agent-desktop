@@ -6,7 +6,7 @@ use super::attributes::copy_string_attr;
 #[cfg(target_os = "macos")]
 use super::element::resolve_element_name;
 #[cfg(target_os = "macos")]
-use super::resolve_bounds::bounds_match;
+use super::resolve_bounds::{bounds_match, bounds_overlap_or_accept};
 
 #[cfg(target_os = "macos")]
 pub(super) fn classify_candidates(
@@ -18,7 +18,7 @@ pub(super) fn classify_candidates(
         0 => Err(AdapterError::element_not_found("element")),
         1 => {
             let candidate = matches.remove(0);
-            if source_window_verified || verified_bounds_match(&candidate, entry) {
+            if source_window_verified || verified_spatial_match(&candidate, entry) {
                 retained_handle(candidate)
             } else {
                 Err(AdapterError::element_not_found("element"))
@@ -34,13 +34,22 @@ fn verified_bounds_match(candidate: &AXElement, entry: &RefEntry) -> bool {
 }
 
 #[cfg(target_os = "macos")]
+fn verified_spatial_match(candidate: &AXElement, entry: &RefEntry) -> bool {
+    if agent_desktop_core::roles::is_mutable_value_role(&entry.role) {
+        bounds_overlap_or_accept(candidate, entry)
+    } else {
+        verified_bounds_match(candidate, entry)
+    }
+}
+
+#[cfg(target_os = "macos")]
 fn classify_ambiguous_candidates(
     matches: Vec<AXElement>,
     entry: &RefEntry,
 ) -> Result<NativeHandle, AdapterError> {
     let mut bounds_matches: Vec<_> = matches
         .iter()
-        .filter(|candidate| verified_bounds_match(candidate, entry))
+        .filter(|candidate| verified_spatial_match(candidate, entry))
         .cloned()
         .collect();
     if entry.bounds_hash.is_some() && bounds_matches.is_empty() {
