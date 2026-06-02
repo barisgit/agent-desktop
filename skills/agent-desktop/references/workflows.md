@@ -265,6 +265,24 @@ agent-desktop focus-window --window-id "w-5678"
 agent-desktop snapshot --app "Finder" --window-id "w-5678" -i
 ```
 
+## Pattern: Navigate a Backgrounded Browser Tab (Headless)
+
+Type a URL into the omnibox and commit Return while another app stays frontmost. Works when the target is the browser's key/only window (single-window, or the window active when the browser was last frontmost).
+
+```bash
+WIN=w-88   # from: agent-desktop list-windows --app "Google Chrome"
+
+# Find the omnibox ref AND snapshot_id from ONE snapshot (omnibox = textfield,
+# description "Address and search bar"). Use -i --compact; do not add --include-bounds.
+agent-desktop snapshot --window-id "$WIN" -i --compact   # read data.snapshot_id and the omnibox ref
+
+agent-desktop set-value @e5 "https://news.ycombinator.com" --snapshot s8f... --window-id "$WIN"
+agent-desktop press return --window-id "$WIN" --policy headless
+agent-desktop list-windows --app "Google Chrome"        # title flips when navigation commits
+```
+
+If `press --window-id` returns `ACTION_FAILED` naming a different key window, the target is a non-key sibling (an OS limit — see `references/macos.md`). Drive its omnibox with `set-value` (reaches any window) or `focus-window` it first.
+
 ## Pattern: Check Before Act (Idempotent)
 
 ```bash
@@ -302,3 +320,5 @@ agent-desktop batch '[
 8. **Snapshotting the full window when an overlay is open.** Use `--surface sheet/alert/popover/menu` instead. Never `--skeleton` for surfaces — they're already focused.
 9. **Re-snapshotting everything after one action.** Use scoped re-drill (`--root @ref`) to refresh only the affected region. Other refs stay valid.
 10. **Relying on implicit focus or cursor movement.** Non-mouse ref commands use semantic paths and block silent physical/headed paths.
+11. **Pairing a ref with the wrong `snapshot_id`.** A ref is only valid against the snapshot that produced it. Using the `snapshot_id` from `status`, from `list-windows`, or from an earlier snapshot gives `STALE_REF`. Always read `data.snapshot_id` from the *same* snapshot output that gave you the ref.
+12. **`--include-bounds` or deep `--max-depth` on web content.** A rendered web page has thousands of nodes; adding bounds or depth blows past the 50KB stdout cap and truncates the JSON. Use `-i --compact` (and `--skeleton` for dense surfaces); reach for `find` when you know the role/name.

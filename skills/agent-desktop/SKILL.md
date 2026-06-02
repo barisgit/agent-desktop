@@ -215,7 +215,7 @@ agent-desktop clipboard-clear                   # Clear clipboard
 
 ### Wait
 ```
-agent-desktop wait 1000                         # Pause 1 second
+agent-desktop wait 1000                         # Pause 1 second (positional ms; there is no --ms flag)
 agent-desktop wait --element @e5 --snapshot <snapshot_id> --timeout 5000 # Wait for element
 agent-desktop wait --element @e5 --predicate actionable --timeout 5000 # Wait until actionable
 agent-desktop wait --element @e5 --predicate value --value "Done" --timeout 5000 # Wait for value
