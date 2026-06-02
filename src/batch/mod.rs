@@ -179,6 +179,7 @@ fn parse_skills(args: Value) -> Result<SkillsArgs, AppError> {
                 .ok_or_else(|| AppError::invalid_input("Batch skills get requires 'name'"))?,
             reference: args.reference,
             full: args.full,
+            raw: false,
         })),
         Some("list") => Some(SkillsAction::List),
         Some("path") => Some(SkillsAction::Path),

@@ -73,7 +73,21 @@ fn main() {
             finish(cmd_name, agent_desktop_core::commands::version::execute());
         }
         Commands::Skills(a) => {
-            let result = match a.action.unwrap_or(SkillsAction::List) {
+            let action = a.action.unwrap_or(SkillsAction::List);
+            if let SkillsAction::Get(g) = &action {
+                if g.raw {
+                    let result = agent_desktop_core::commands::skills::get(
+                        agent_desktop_core::commands::skills::GetArgs {
+                            name: g.name.clone(),
+                            full: g.full,
+                            reference: g.reference.clone(),
+                        },
+                    );
+                    finish_raw(cmd_name, result);
+                    return;
+                }
+            }
+            let result = match action {
                 SkillsAction::List => agent_desktop_core::commands::skills::list(),
                 SkillsAction::Path => agent_desktop_core::commands::skills::path(),
                 SkillsAction::Get(g) => agent_desktop_core::commands::skills::get(
@@ -152,6 +166,26 @@ fn run_with_adapter(cmd: Commands, cmd_name: &str, context: &CommandContext) {
 
     let result = dispatch::dispatch(cmd, &adapter, &report, context);
     finish(cmd_name, result);
+}
+
+fn finish_raw(cmd_name: &str, result: Result<serde_json::Value, agent_desktop_core::error::AppError>) {
+    match result {
+        Ok(data) => {
+            let markdown = data
+                .get("content")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or_default();
+            let stdout = std::io::stdout();
+            let mut writer = BufWriter::new(stdout.lock());
+            let _ = writer.write_all(markdown.as_bytes());
+            if !markdown.ends_with('\n') {
+                let _ = writer.write_all(b"\n");
+            }
+            let _ = writer.flush();
+            std::process::exit(0);
+        }
+        Err(_) => finish(cmd_name, result),
+    }
 }
 
 fn finish(cmd_name: &str, result: Result<serde_json::Value, agent_desktop_core::error::AppError>) {
