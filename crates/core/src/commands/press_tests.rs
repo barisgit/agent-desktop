@@ -82,3 +82,105 @@ fn core_blocks_nothing_by_default() {
     )
     .expect("core must not hardcode any block; the default adapter allows everything");
 }
+
+struct WindowPressAdapter {
+    windows: Vec<crate::node::WindowInfo>,
+    last: std::sync::Mutex<Option<(i32, String, bool)>>,
+}
+
+impl PlatformAdapter for WindowPressAdapter {
+    fn list_windows(
+        &self,
+        _filter: &crate::adapter::WindowFilter,
+    ) -> Result<Vec<crate::node::WindowInfo>, AdapterError> {
+        Ok(self.windows.clone())
+    }
+
+    fn press_key_for_window(
+        &self,
+        window: &crate::node::WindowInfo,
+        combo: &KeyCombo,
+        steal_focus: bool,
+    ) -> Result<ActionResult, AdapterError> {
+        *self.last.lock().expect("window press state") =
+            Some((window.pid, combo.key.clone(), steal_focus));
+        Ok(ActionResult::new("press_key"))
+    }
+}
+
+fn window(id: &str, pid: i32) -> crate::node::WindowInfo {
+    crate::node::WindowInfo {
+        id: id.into(),
+        title: format!("title-{id}"),
+        app: "TestApp".into(),
+        pid,
+        bounds: None,
+        is_focused: false,
+    }
+}
+
+fn window_args(window_id: &str, policy: InteractionPolicy) -> PressArgs {
+    PressArgs {
+        combo: "return".into(),
+        ref_id: None,
+        snapshot: None,
+        window_id: Some(window_id.into()),
+        app: None,
+        target_app: None,
+        target_pid: None,
+        policy,
+        force: false,
+    }
+}
+
+#[test]
+fn window_id_routes_headless_press_without_focus_steal() {
+    let adapter = WindowPressAdapter {
+        windows: vec![window("w-1", 10), window("w-2", 20)],
+        last: std::sync::Mutex::new(None),
+    };
+    execute(
+        window_args("w-2", InteractionPolicy::headless()),
+        &adapter,
+        &CommandContext::default(),
+    )
+    .unwrap();
+    assert_eq!(
+        *adapter.last.lock().expect("window press state"),
+        Some((20, "return".into(), false))
+    );
+}
+
+#[test]
+fn window_id_headed_press_allows_focus_steal() {
+    let adapter = WindowPressAdapter {
+        windows: vec![window("w-1", 10)],
+        last: std::sync::Mutex::new(None),
+    };
+    execute(
+        window_args("w-1", InteractionPolicy::headed()),
+        &adapter,
+        &CommandContext::default(),
+    )
+    .unwrap();
+    assert_eq!(
+        *adapter.last.lock().expect("window press state"),
+        Some((10, "return".into(), true))
+    );
+}
+
+#[test]
+fn unknown_window_id_returns_invalid_args() {
+    let adapter = WindowPressAdapter {
+        windows: vec![window("w-1", 10)],
+        last: std::sync::Mutex::new(None),
+    };
+    let error = execute(
+        window_args("w-404", InteractionPolicy::headless()),
+        &adapter,
+        &CommandContext::default(),
+    )
+    .unwrap_err();
+    assert_eq!(error.code(), "INVALID_ARGS");
+    assert!(adapter.last.lock().expect("window press state").is_none());
+}

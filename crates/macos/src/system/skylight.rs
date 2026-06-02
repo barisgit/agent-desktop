@@ -46,8 +46,8 @@ mod imp {
         record[offset..offset + 4].copy_from_slice(&window_number.to_le_bytes());
     }
 
-    fn target_only_focus_record(window_number: u32) -> [u8; 0xF8] {
-        let mut record = [0u8; 0xF8];
+    fn target_only_focus_record(window_number: u32) -> [u8; 0x100] {
+        let mut record = [0u8; 0x100];
         record[0x04] = 0xF8;
         record[0x08] = 0x0D;
         stamp_window_number(&mut record, 0x3C, window_number);
