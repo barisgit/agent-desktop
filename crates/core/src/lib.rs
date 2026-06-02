@@ -5,6 +5,7 @@ pub mod action_step;
 pub mod action_step_outcome;
 pub(crate) mod actionability;
 pub mod adapter;
+mod adapter_types;
 pub mod capability;
 pub mod commands;
 pub mod context;

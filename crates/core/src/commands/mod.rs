@@ -67,6 +67,7 @@ pub(crate) mod wait_predicate;
 pub mod wait_selector;
 pub(crate) mod wait_text_match;
 pub(crate) mod wait_timeout;
+pub(crate) mod window_resolve;
 
 #[cfg(test)]
 mod ref_policy_tests;

@@ -1,3 +1,6 @@
+use crate::adapter_actions::{
+    execute_action_impl, execute_ax_only_action_impl, get_subtree_impl, with_borrowed_ax_element,
+};
 use agent_desktop_core::{
     PermissionReport,
     action::{DragParams, MouseEvent, Point, WindowOp},
@@ -382,76 +385,6 @@ impl PlatformAdapter for MacOSAdapter {
         handle: &NativeHandle,
         opts: &TreeOptions,
     ) -> Result<AccessibilityNode, AdapterError> {
-        with_borrowed_ax_element(handle, |el| {
-            let mut ancestors = FxHashSet::default();
-            let context = crate::tree::TreeBuildContext::empty(opts.include_bounds);
-            crate::tree::build_subtree(
-                el,
-                0,
-                0,
-                opts.max_depth,
-                &mut ancestors,
-                opts.skeleton,
-                &context,
-            )
-            .ok_or_else(|| {
-                AdapterError::new(
-                    agent_desktop_core::error::ErrorCode::ElementNotFound,
-                    "Element no longer exists in accessibility tree",
-                )
-                .with_suggestion("Run 'snapshot' to refresh refs, then retry.")
-            })
-        })
+        get_subtree_impl(handle, opts)
     }
-}
-
-fn execute_action_impl(
-    handle: &NativeHandle,
-    request: ActionRequest,
-) -> Result<ActionResult, AdapterError> {
-    with_borrowed_ax_element(handle, |el| crate::actions::perform_action(el, &request))
-}
-
-fn execute_ax_only_action_impl(
-    handle: &NativeHandle,
-    request: ActionRequest,
-) -> Result<ActionResult, AdapterError> {
-    use crate::actions::{chain::ChainContext, chain::execute_chain, chain_defs, discovery};
-    use agent_desktop_core::{action::Action, error::ErrorCode};
-
-    with_borrowed_ax_element(handle, |element| {
-        let chain = match request.action {
-            Action::Click => &chain_defs::CLICK_CHAIN,
-            Action::RightClick => &chain_defs::RIGHT_CLICK_CHAIN,
-            _ => {
-                return Err(AdapterError::new(
-                    ErrorCode::ActionNotSupported,
-                    "AX-only execution supports only click and right-click",
-                ));
-            }
-        };
-        let capabilities = discovery::discover(element);
-        let context = ChainContext {
-            dynamic_value: None,
-            deadline: None,
-        };
-        execute_chain(element, &capabilities, chain, &context, request.policy)?;
-        Ok(ActionResult::new(match request.action {
-            Action::RightClick => "right_click",
-            _ => "click",
-        }))
-    })
-}
-
-#[cfg(target_os = "macos")]
-fn with_borrowed_ax_element<T>(
-    handle: &NativeHandle,
-    f: impl FnOnce(&crate::tree::AXElement) -> T,
-) -> T {
-    use std::mem::ManuallyDrop;
-
-    let el = ManuallyDrop::new(crate::tree::AXElement(
-        handle.as_raw() as accessibility_sys::AXUIElementRef
-    ));
-    f(&el)
 }

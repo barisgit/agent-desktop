@@ -11,7 +11,13 @@ pub(crate) use super::chain_step::ChainStep;
 #[cfg(target_os = "macos")]
 mod imp {
     use super::*;
-    use crate::actions::{ax_helpers, chain_verify};
+    use crate::actions::{
+        ax_helpers,
+        chain_policy::{
+            focus_cycle_permitted, headless_pid_click_permitted, physical_click_permitted,
+        },
+        chain_value::{increment_to_value, set_bool_verified, set_dynamic_verified},
+    };
     use std::time::{Duration, Instant};
 
     const DEFAULT_CHAIN_TIMEOUT: Duration = Duration::from_secs(10);
@@ -288,179 +294,6 @@ mod imp {
             .map(|ms| ms.min(MAX_CHAIN_TIMEOUT_MS))
             .map(Duration::from_millis)
             .unwrap_or(DEFAULT_CHAIN_TIMEOUT)
-    }
-
-    fn physical_click_permitted(policy: InteractionPolicy) -> bool {
-        policy.allow_focus_steal && policy.allow_cursor_move
-    }
-
-    fn headless_pid_click_permitted(policy: InteractionPolicy) -> bool {
-        !policy.allow_focus_steal && !policy.allow_cursor_move
-    }
-
-    fn focus_cycle_permitted(policy: InteractionPolicy) -> bool {
-        policy.allow_focus_steal
-    }
-
-    fn set_dynamic_verified(el: &AXElement, attr: &str, value: &str) -> Result<bool, AdapterError> {
-        if attr == "AXValue" {
-            ax_helpers::set_ax_value_coerced(el, value)?;
-        } else {
-            ax_helpers::set_ax_string_or_err(el, attr, value)?;
-        }
-        Ok(chain_verify::dynamic_write_had_effect(
-            attr,
-            ax_helpers::element_role(el).as_deref(),
-            value,
-            crate::tree::copy_value_typed(el).as_deref(),
-        ))
-    }
-
-    /// Drives AXIncrement/AXDecrement until the control reaches `target`.
-    /// Steppers and some sliders expose no settable AXValue but step through
-    /// these actions. Stops on reaching the target or on no observable
-    /// progress (the action stopped moving the value). Deadline expiry is a
-    /// hard error: the control may sit at a half-applied value, and silently
-    /// reporting "step failed" would mask that mutation as ACTION_FAILED with
-    /// recovery guidance pointing the wrong way.
-    fn increment_to_value(
-        el: &AXElement,
-        target: &str,
-        deadline: Option<Instant>,
-    ) -> Result<bool, AdapterError> {
-        const MAX_INCREMENT_STEPS: usize = 1024;
-
-        let target = match finite_target(target) {
-            Some(target) => target,
-            None => return Ok(false),
-        };
-        let read = || crate::tree::copy_value_typed(el).and_then(|v| v.parse::<f64>().ok());
-        let mut current = match read() {
-            Some(c) => c,
-            None => return Ok(false),
-        };
-        let actions = ax_helpers::list_ax_actions(el);
-        if !actions.iter().any(|action| action == "AXIncrement")
-            && !actions.iter().any(|action| action == "AXDecrement")
-        {
-            return Ok(false);
-        }
-        let start = current;
-        for _ in 0..MAX_INCREMENT_STEPS {
-            if (current - target).abs() < 0.5 {
-                return Ok(true);
-            }
-            if deadline.is_some_and(|dl| Instant::now() > dl) {
-                return Err(chain_verify::increment_deadline_error(
-                    start, current, target,
-                ));
-            }
-            let action = if current < target {
-                "AXIncrement"
-            } else {
-                "AXDecrement"
-            };
-            if !ax_helpers::try_ax_action(el, action) {
-                break;
-            }
-            match read() {
-                Some(next) if (next - current).abs() >= f64::EPSILON => current = next,
-                _ => break,
-            }
-        }
-        if (current - target).abs() < 0.5 {
-            return Ok(true);
-        }
-        if (current - start).abs() >= f64::EPSILON {
-            return Err(chain_verify::increment_step_limit_error(
-                start, current, target,
-            ));
-        }
-        Ok(false)
-    }
-
-    fn finite_target(target: &str) -> Option<f64> {
-        target.parse::<f64>().ok().filter(|value| value.is_finite())
-    }
-
-    fn set_bool_verified(el: &AXElement, attr: &str, value: bool) -> Result<bool, AdapterError> {
-        Ok(ax_helpers::set_ax_bool_or_err(el, attr, value)?
-            && chain_verify::bool_write_had_effect(
-                attr,
-                value,
-                crate::tree::copy_bool_attr(el, attr),
-            ))
-    }
-
-    #[cfg(test)]
-    mod tests {
-        use super::{
-            finite_target, focus_cycle_permitted, headless_pid_click_permitted,
-            physical_click_permitted,
-        };
-        use agent_desktop_core::InteractionPolicy;
-
-        #[test]
-        fn focus_cycle_permitted_when_focus_steal_allowed() {
-            assert!(focus_cycle_permitted(InteractionPolicy::headed()));
-            assert!(focus_cycle_permitted(InteractionPolicy::focus_fallback()));
-            assert!(!focus_cycle_permitted(InteractionPolicy::headless()));
-        }
-
-        #[test]
-        fn focus_cycle_disjoint_from_headless_pid() {
-            for policy in [
-                InteractionPolicy::headed(),
-                InteractionPolicy::focus_fallback(),
-                InteractionPolicy::headless(),
-            ] {
-                assert!(
-                    !(focus_cycle_permitted(policy) && headless_pid_click_permitted(policy)),
-                    "policy {policy:?} permits both focus-cycle and headless-pid paths"
-                );
-            }
-        }
-
-        #[test]
-        fn headless_pid_permitted_only_under_headless_policy() {
-            assert!(headless_pid_click_permitted(InteractionPolicy::headless()));
-            assert!(!headless_pid_click_permitted(
-                InteractionPolicy::focus_fallback()
-            ));
-            assert!(!headless_pid_click_permitted(InteractionPolicy::headed()));
-        }
-
-        #[test]
-        fn physical_click_permitted_only_under_headed_policy() {
-            assert!(physical_click_permitted(InteractionPolicy::headed()));
-            assert!(!physical_click_permitted(
-                InteractionPolicy::focus_fallback()
-            ));
-            assert!(!physical_click_permitted(InteractionPolicy::headless()));
-        }
-
-        #[test]
-        fn physical_and_headless_predicates_are_mutually_exclusive() {
-            for policy in [
-                InteractionPolicy::headed(),
-                InteractionPolicy::focus_fallback(),
-                InteractionPolicy::headless(),
-            ] {
-                assert!(
-                    !(physical_click_permitted(policy) && headless_pid_click_permitted(policy)),
-                    "policy {policy:?} permits both physical and headless paths"
-                );
-            }
-        }
-
-        #[test]
-        fn finite_target_rejects_non_finite_numbers() {
-            assert_eq!(finite_target("42.5"), Some(42.5));
-            assert_eq!(finite_target("NaN"), None);
-            assert_eq!(finite_target("inf"), None);
-            assert_eq!(finite_target("-inf"), None);
-            assert_eq!(finite_target("not-a-number"), None);
-        }
     }
 }
 
