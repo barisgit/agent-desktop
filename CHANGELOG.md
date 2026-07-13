@@ -6,6 +6,90 @@
 
 * make sessions the first-class trace container: `session start/end/list/gc`, manifest-gated automatic JSONL segments under `sessions/<id>/trace/`, and `--trace <path>` override preserved ([#89](https://github.com/lahfir/agent-desktop/pull/89))
 
+## [0.5.0](https://github.com/barisgit/agent-desktop/compare/v0.4.7...v0.5.0) (2026-07-13)
+
+
+### ⚠ BREAKING CHANGES
+
+* the version command no longer accepts --json; it always emits the standard JSON envelope.
+* chain execution deadlines now return TIMEOUT instead of ACTION_FAILED when the target app does not respond before the chain deadline.
+
+### Features
+
+* 10-step scroll chain, focus guards, enhanced click chain, bounds fix ([595ccb6](https://github.com/barisgit/agent-desktop/commit/595ccb6cc45554351ea3e30b95e4ca47bdf4e16b))
+* add --wait-for selector polling flags ([#86](https://github.com/barisgit/agent-desktop/issues/86)) ([ce23278](https://github.com/barisgit/agent-desktop/commit/ce232787b50270d6f590e11bd2b16c7354de623d))
+* add 19 new commands, AX-first rewrites, LOC compliance ([d3f7e03](https://github.com/barisgit/agent-desktop/commit/d3f7e03c67832c652a6125f61fbb7ab2f0801939))
+* add 19 new commands, AX-first rewrites, LOC compliance ([eca04e8](https://github.com/barisgit/agent-desktop/commit/eca04e839288b121f6f41c6de525a8396d10654c))
+* add agent-desktop skill for universal AI agent support ([ef45135](https://github.com/barisgit/agent-desktop/commit/ef45135087d09a7e065f65d9a0558d1e710cb8bf))
+* add Claude Code skills for agent-desktop automation ([ad91cd3](https://github.com/barisgit/agent-desktop/commit/ad91cd32cf2de1c1c8dcda4c0dcae37f0022b4c6))
+* add electron/web app compatibility for accessibility tree traversal ([a19c1b5](https://github.com/barisgit/agent-desktop/commit/a19c1b5132d3b71c5de58886ba51357ffc9bd1e8))
+* add fallback chains for set-value, clear, focus, scroll-to, type and post-action state hints ([11f8da0](https://github.com/barisgit/agent-desktop/commit/11f8da06e84ed67b0e26dbc1946f7a7542e89dcd))
+* add notification command types, adapter trait, and CLI wiring ([c5b05ba](https://github.com/barisgit/agent-desktop/commit/c5b05bab600aafa36c642f21837c44583b36459c))
+* add notification management commands (macOS) ([b1fd368](https://github.com/barisgit/agent-desktop/commit/b1fd368f195640642adf011b75cca6ecb9e5acc3))
+* add release automation with GitHub Releases and npm distribution ([18fc50c](https://github.com/barisgit/agent-desktop/commit/18fc50cca51f2ed10b6dfb5576602b6ce344bc95))
+* add structural hints to splitter columns in snapshots ([48f8470](https://github.com/barisgit/agent-desktop/commit/48f8470948b4f636dfa6f4489e4cb6d9f520722c))
+* add structured verbose logging across all layers ([c7316e8](https://github.com/barisgit/agent-desktop/commit/c7316e8b5160ab0e6ba554bcd502d4c47adf8b1a))
+* add trace viewer and replay artifacts ([e3e1872](https://github.com/barisgit/agent-desktop/commit/e3e1872ff3088f03f3e50e65ebc9e2b068a17b5f))
+* AX-first right-click chain with inline context menu capture ([cddc5d3](https://github.com/barisgit/agent-desktop/commit/cddc5d3547f058a78f8b398fa982e39a1fcbf6b1))
+* bundle skill docs and refactor --help for AI agents ([#36](https://github.com/barisgit/agent-desktop/issues/36)) ([b04d6f9](https://github.com/barisgit/agent-desktop/commit/b04d6f97317af67648890d2d3b5ead0d27c466c9))
+* **ffi:** Phase B and C — Python smoke harness, parity gates, build.rs codegen ([#77](https://github.com/barisgit/agent-desktop/issues/77)) ([9023f33](https://github.com/barisgit/agent-desktop/commit/9023f331b3981a41414ea0f92e2e5120a212e357))
+* **ffi:** ship C-ABI cdylib with review hardening and release pipeline ([#26](https://github.com/barisgit/agent-desktop/issues/26)) ([3cffbd6](https://github.com/barisgit/agent-desktop/commit/3cffbd67f6b27f42001643bef9fd2530cb7f9003))
+* implement --compact flag to collapse single-child unnamed nodes ([4a300c8](https://github.com/barisgit/agent-desktop/commit/4a300c8cb054462ca95fb5160e89e8fce661ec3b))
+* **macos,core:** harden adapter and core foundation with caller-controllable guardrails ([#82](https://github.com/barisgit/agent-desktop/issues/82)) ([94ce6c5](https://github.com/barisgit/agent-desktop/commit/94ce6c551fff4ffd2afc44ab6a9f655b4486da11))
+* **macos:** add NC session RAII guard and notification adapter wiring ([0d55c21](https://github.com/barisgit/agent-desktop/commit/0d55c21de0f0ea6ea08ccb836e5527c9da513620))
+* **macos:** implement dismiss and notification action commands ([53d697d](https://github.com/barisgit/agent-desktop/commit/53d697d52248c3fa06797787b1eb549ac2766533))
+* **macos:** implement notification list via AX tree traversal ([53549a3](https://github.com/barisgit/agent-desktop/commit/53549a384eec67572ee05c31621b8b4174425ab3))
+* make sessions the first-class trace container ([35fa914](https://github.com/barisgit/agent-desktop/commit/35fa914b52bb0dffb0e630f9d9085789c3f81542))
+* Phase 1 foundation — workspace scaffold, core engine, macOS adapter, 31 commands ([a346f24](https://github.com/barisgit/agent-desktop/commit/a346f242c25dfad1c849e6d50f9ab25a42b462d9))
+* progressive skeleton traversal with ref-rooted drill-down ([#20](https://github.com/barisgit/agent-desktop/issues/20)) ([c17f2fa](https://github.com/barisgit/agent-desktop/commit/c17f2fae7abbbe2c914a050fa9e9be5fca9c6af0))
+* publish enhanced reliability release ([8fbf904](https://github.com/barisgit/agent-desktop/commit/8fbf9049971c04dd57db4b7faf6352bc7d5e186f))
+* scalable skill architecture with ClawHub auto-publishing ([#14](https://github.com/barisgit/agent-desktop/issues/14)) ([9766520](https://github.com/barisgit/agent-desktop/commit/97665203a464e605bc9b156ec90029c5909399be))
+* smart AX-first click chain + macOS crate restructure ([4616c8f](https://github.com/barisgit/agent-desktop/commit/4616c8f65f974505b0eedb5485c865d3b905342b))
+* surface-targeted snapshot, menu wait, list-surfaces command ([39178b2](https://github.com/barisgit/agent-desktop/commit/39178b291602d192de97aa0150c261db1dcc7ca6))
+
+
+### Bug Fixes
+
+* add clawhub login step before sync in CI ([208af12](https://github.com/barisgit/agent-desktop/commit/208af12459fea2255e1c80b8cdc9ac420316d769))
+* add dwell time before drag release for drop target recognition ([2a52d62](https://github.com/barisgit/agent-desktop/commit/2a52d62106699b36f62f9af83895f2264b80efb1))
+* add menubar surface, fix press --app crash and modifier mapping ([a231962](https://github.com/barisgit/agent-desktop/commit/a2319623b4d1d2b6b2f6e1a4ab9a8b8cbbfd02eb))
+* address code review findings (double-free, CF leaks, injection) ([2f495ff](https://github.com/barisgit/agent-desktop/commit/2f495ffb69be67f3136b076534e078cc31b005c2))
+* align error codes with spec (APP_NOT_FOUND, PERM_DENIED) and add -i shorthand ([6dc567a](https://github.com/barisgit/agent-desktop/commit/6dc567a4aedff15cf82a82601089cb0b87da4e26))
+* ancestor-path cycle detection + CGEvent click fallback ([198d7d7](https://github.com/barisgit/agent-desktop/commit/198d7d7d27167044a448b6616fa5c9c0554321bf))
+* correct GitHub Release download URL and simplify tag format ([8f66a93](https://github.com/barisgit/agent-desktop/commit/8f66a9346e02a751a83ac02313dcec2d9c81bde8))
+* detect open menus via AXMenuBarItem.AXSelected, not AXMenus attribute ([7f0d610](https://github.com/barisgit/agent-desktop/commit/7f0d6103d16969a0abfa84a62b6819dbd0d1cc8e))
+* handle null bounds in refmap and improve sidebar click resolution ([d4197e8](https://github.com/barisgit/agent-desktop/commit/d4197e8f6f6700f2f672d3e1e436ecf24cf82e01))
+* harden macos ax window fallback ([3b266fd](https://github.com/barisgit/agent-desktop/commit/3b266fdf040bf83438f69a400b032fd12b8715c6))
+* harden macos stale ref resolution ([#62](https://github.com/barisgit/agent-desktop/issues/62)) ([9f144c2](https://github.com/barisgit/agent-desktop/commit/9f144c2cafe3ba0ade479c1b87ecac6cd88adcef))
+* include README and CHANGELOG in npm package ([084fc8c](https://github.com/barisgit/agent-desktop/commit/084fc8c960527c0d0654028794ec3c4fd2d970c4))
+* **macos:** guard CFArray casts with type-ID check (fixes Mail.app crash) ([#50](https://github.com/barisgit/agent-desktop/issues/50)) ([c02cb5e](https://github.com/barisgit/agent-desktop/commit/c02cb5ecb7314f053d63937437e5f5ba48de3209))
+* **macos:** harden retained_handle null guard against release-only CFRetain(null) ([#80](https://github.com/barisgit/agent-desktop/issues/80)) ([a708fa0](https://github.com/barisgit/agent-desktop/commit/a708fa03326a03dbc82acc7e41bd3ec262a05248))
+* **macos:** remove AXPress from dismiss action list ([27ef4f3](https://github.com/barisgit/agent-desktop/commit/27ef4f34c038c26f5852bf1f6026762a98d0df0a))
+* **macos:** restore frontmost app after notification center interaction ([3881bc8](https://github.com/barisgit/agent-desktop/commit/3881bc82bdb5a4bb7689f1e1e2237bb745e60c21))
+* **macos:** use pgrep and async osascript for NC lifecycle ([9797585](https://github.com/barisgit/agent-desktop/commit/979758538fca0145e9245641fb03a0769eed68de))
+* make all 30 commands work end-to-end on macOS ([1d98ab8](https://github.com/barisgit/agent-desktop/commit/1d98ab828ce5bcb39e212548ae2f2a052e67aac9))
+* remove AXShowDefaultUI from activation chain, fix child walk ([74242f5](https://github.com/barisgit/agent-desktop/commit/74242f5040af9c46c98a3f5232dc7567538c28e1))
+* resolve all 47 code review findings from Phase 1 audit ([218503a](https://github.com/barisgit/agent-desktop/commit/218503a7ebacacd4fbc6b388a6cf5e3bb86af039))
+* resolve fullscreen AX tree retrieval returning ref_count: 0 ([11d01e1](https://github.com/barisgit/agent-desktop/commit/11d01e1c9ff38a8f91149fb5d8d20e6672e3454c))
+* resolve fullscreen AX tree retrieval returning ref_count: 0 ([a52b7c7](https://github.com/barisgit/agent-desktop/commit/a52b7c704a4d13fdc0d6b72f4080bb0fc118be64))
+* right-click uses AXShowMenu; context menus detected via focused element ([2c9aee3](https://github.com/barisgit/agent-desktop/commit/2c9aee397912d6a903d9ef1e26c786697383ae95))
+* show skill install prompt on all success paths ([39b2bc6](https://github.com/barisgit/agent-desktop/commit/39b2bc63480890f7ed417b2c040eecf80c4628a0))
+* stabilize empty accessibility identity refs ([1fb5a7d](https://github.com/barisgit/agent-desktop/commit/1fb5a7d51eb798100b4d597c755fee1161e298bf))
+* suppress dead_code lint on BatchCommand deserializer struct ([608d4aa](https://github.com/barisgit/agent-desktop/commit/608d4aaaa195b95626f17aa4bbca2d69609f14cc))
+* use macos-latest for both build targets ([91c7677](https://github.com/barisgit/agent-desktop/commit/91c76777cb7ee864b45e14d123c79c08f0c2d5b9))
+* use simple release strategy for workspace version bumps ([0ab78dd](https://github.com/barisgit/agent-desktop/commit/0ab78dde0e1ff702db6c8b667784fa456245b26b))
+
+
+### Performance
+
+* use curl for binary download in postinstall ([ebafb71](https://github.com/barisgit/agent-desktop/commit/ebafb71603f5f2b32af8ac5bf6c88df3d6012f70))
+
+
+### Refactoring
+
+* over-engineering audit cleanup ([#64](https://github.com/barisgit/agent-desktop/issues/64)) ([dbb2be6](https://github.com/barisgit/agent-desktop/commit/dbb2be639ecc1f979031818259f587f951086b3c))
+* unify command execution contracts ([1291a9c](https://github.com/barisgit/agent-desktop/commit/1291a9cdbf0566424d38da1eab397d6d4091c06c))
+
 ## [0.4.7](https://github.com/lahfir/agent-desktop/compare/v0.4.6...v0.4.7) (2026-07-02)
 
 
