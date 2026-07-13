@@ -1,10 +1,10 @@
 use super::test_support::entry;
 use super::*;
-use crate::action::Action;
+use crate::action::{Action, WindowOp};
 use crate::adapter::NativeHandle;
 use crate::capability;
 use crate::error::{AdapterError, ErrorCode};
-use crate::node::AppInfo;
+use crate::node::{AppInfo, WindowInfo};
 use crate::refs::RefMap;
 use crate::refs_test_support::HomeGuard;
 use std::sync::atomic::{AtomicU32, Ordering};

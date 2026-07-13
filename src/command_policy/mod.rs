@@ -150,6 +150,11 @@ fn validate_args(cmd: &Commands) -> Result<(), AppError> {
                 validate_ref_id(ref_id)?;
             }
         }
+        Commands::Press(args) => {
+            if let Some(ref_id) = &args.ref_id {
+                validate_ref_id(ref_id)?;
+            }
+        }
         Commands::Drag(args) => {
             if let Some(ref_id) = &args.from {
                 validate_ref_id(ref_id)?;
@@ -165,7 +170,6 @@ fn validate_args(cmd: &Commands) -> Result<(), AppError> {
         }
         Commands::Find(_)
         | Commands::Screenshot(_)
-        | Commands::Press(_)
         | Commands::KeyDown(_)
         | Commands::KeyUp(_)
         | Commands::MouseMove(_)

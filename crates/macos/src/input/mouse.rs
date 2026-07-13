@@ -224,17 +224,6 @@ mod imp {
         Ok(())
     }
 
-    fn post_event_with_source(
-        source: &CGEventSource,
-        event_type: CGEventType,
-        point: CGPoint,
-        button: CGMouseButton,
-    ) -> Result<(), AdapterError> {
-        let ev = create_event_with_source(source, event_type, point, button)?;
-        ev.post(CGEventTapLocation::HID);
-        Ok(())
-    }
-
     fn post_event_to_pid(
         event_type: CGEventType,
         point: CGPoint,

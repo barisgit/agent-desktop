@@ -5,7 +5,7 @@ fn default_scroll_amount() -> u32 {
     3
 }
 
-fn press_policy_default() -> InteractionPolicyArg {
+fn headless_policy_default() -> InteractionPolicyArg {
     InteractionPolicyArg::Headless
 }
 
@@ -171,7 +171,7 @@ pub(crate) struct PressArgs {
         default_value_t = InteractionPolicyArg::Headless,
         help = "Interaction policy: headless (default), focus-fallback, physical"
     )]
-    #[serde(default = "press_policy_default")]
+    #[serde(default = "headless_policy_default")]
     pub policy: InteractionPolicyArg,
     #[arg(
         long,
@@ -343,10 +343,10 @@ pub(crate) struct MouseClickArgs {
     #[arg(
         long,
         value_enum,
-        default_value_t = InteractionPolicyArg::Physical,
-        help = "Interaction policy: physical (default), focus-fallback, headless"
+        default_value_t = InteractionPolicyArg::Headless,
+        help = "Interaction policy: headless (default), focus-fallback, physical"
     )]
-    #[serde(default)]
+    #[serde(default = "headless_policy_default")]
     pub policy: InteractionPolicyArg,
     #[arg(
         long = "target-app",

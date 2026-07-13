@@ -166,7 +166,7 @@ fn resolve_focus_fallback_no_target_returns_none() {
 }
 
 #[test]
-fn mouse_click_headed_default_passes_none_target_pid() {
+fn mouse_click_global_headed_upgrades_headless_policy() {
     let adapter = AppsAdapter::new(vec![]);
     mouse_click::execute(
         mouse_click::MouseClickArgs {
@@ -174,7 +174,7 @@ fn mouse_click_headed_default_passes_none_target_pid() {
             y: 200.0,
             button: MouseButton::Left,
             count: 1,
-            policy: InteractionPolicy::headed(),
+            policy: InteractionPolicy::headless(),
             target_pid: None,
             target_app: None,
         },

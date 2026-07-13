@@ -1,13 +1,11 @@
 use crate::{
-    action::WindowOp,
     action_request::ActionRequest,
     action_result::ActionResult,
-    adapter::{PlatformAdapter, TreeOptions, WindowFilter},
+    adapter::{PlatformAdapter, TreeOptions},
     commands::{wait_selector, wait_selector::WaitSelectorInput},
     context::CommandContext,
     error::AppError,
     interaction_policy::InteractionPolicy,
-    node::WindowInfo,
     refs::{RefEntry, validate_ref_id},
     refs_store::RefStore,
     resolved_element::ResolvedElement,
@@ -290,8 +288,7 @@ pub(crate) fn execute_ref_action_result_with_context(
 }
 
 pub(crate) use super::window_resolve::{
-    find_window_for_pid, resolve_app_pid, resolve_window_by_id, resolve_window_for_app,
-    window_op_command,
+    resolve_app_pid, resolve_window_by_id, resolve_window_for_app, window_op_command,
 };
 
 #[cfg(test)]

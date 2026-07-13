@@ -28,12 +28,9 @@ pub fn execute(
     adapter: &dyn PlatformAdapter,
     context: &CommandContext,
 ) -> Result<Value, AppError> {
-    let target_pid = resolve_raw_mouse_target_pid(
-        args.target_pid,
-        args.target_app.as_deref(),
-        args.policy,
-        adapter,
-    )?;
+    let policy = context.request(ax_action(&args.button), args.policy).policy;
+    let target_pid =
+        resolve_raw_mouse_target_pid(args.target_pid, args.target_app.as_deref(), policy, adapter)?;
     if target_pid.is_none() {
         require_cursor_policy(context, "mouse-click")?;
     }
@@ -54,7 +51,7 @@ pub fn execute(
         attempted_paths.push("ax_press");
         let request = ActionRequest {
             action: ax_action(&args.button),
-            policy: args.policy,
+            policy,
         };
         match adapter.execute_ax_only_action(&hit.handle, request) {
             Ok(_) => {
@@ -73,7 +70,7 @@ pub fn execute(
     }
 
     if chosen_path.is_none() {
-        let cg_path = cg_path_for(target_pid, args.policy);
+        let cg_path = cg_path_for(target_pid, policy);
         attempted_paths.push(cg_path);
         adapter.mouse_event(
             MouseEvent {
@@ -82,7 +79,7 @@ pub fn execute(
                 button: args.button.clone(),
             },
             target_pid,
-            args.policy,
+            policy,
         )?;
         chosen_path = Some(cg_path);
     }

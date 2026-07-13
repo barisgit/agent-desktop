@@ -20,6 +20,7 @@ const NON_COMMAND_MODULES: &[&str] = &[
     "wait_text_match",
     "wait_timeout",
     "wait_selector",
+    "window_resolve",
 ];
 
 const COMMAND_SPECIFIC_TESTS: &[&str] = &[
