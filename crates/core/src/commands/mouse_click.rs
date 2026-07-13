@@ -72,7 +72,7 @@ pub fn execute(
     if chosen_path.is_none() {
         let cg_path = cg_path_for(target_pid, policy);
         attempted_paths.push(cg_path);
-        adapter.mouse_event(
+        let result = adapter.mouse_event(
             MouseEvent {
                 kind: MouseEventKind::Click { count: args.count },
                 point,
@@ -80,7 +80,11 @@ pub fn execute(
             },
             target_pid,
             policy,
-        )?;
+        );
+        if let Err(error) = result {
+            release_hit_handle(hit.as_ref(), adapter);
+            return Err(error.into());
+        }
         chosen_path = Some(cg_path);
     }
 
@@ -94,11 +98,7 @@ pub fn execute(
         .as_ref()
         .map(|hit| hit_test_lookup::element_json(hit, ref_id.as_deref()));
 
-    if let Some(hit) = &hit
-        && !hit.handle.as_raw().is_null()
-    {
-        let _ = adapter.release_handle(&hit.handle);
-    }
+    release_hit_handle(hit.as_ref(), adapter);
 
     let mut data = serde_json::Map::new();
     data.insert("clicked".into(), Value::Bool(true));
@@ -121,6 +121,14 @@ pub fn execute(
         );
     }
     Ok(Value::Object(data))
+}
+
+fn release_hit_handle(hit: Option<&HitTestResult>, adapter: &dyn PlatformAdapter) {
+    if let Some(hit) = hit
+        && !hit.handle.as_raw().is_null()
+    {
+        let _ = adapter.release_handle(&hit.handle);
+    }
 }
 
 fn ax_action(button: &MouseButton) -> Action {
@@ -154,3 +162,7 @@ fn cg_path_for(target_pid: Option<i32>, policy: InteractionPolicy) -> &'static s
         None => "cg_broadcast",
     }
 }
+
+#[cfg(test)]
+#[path = "mouse_click_tests.rs"]
+mod tests;
