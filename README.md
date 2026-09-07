@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <video src="assets/Videos/Codex using agent-desktop.mp4" controls width="800"></video>
+  <video src="https://github.com/user-attachments/assets/9b2c9f8c-a49d-4b69-b6cf-11d9e0d40ceb" controls width="800"></video>
 </p>
 
 **agent-desktop** is a native desktop automation CLI designed for AI agents, built with Rust. It gives structured access to any application through OS accessibility trees — no screenshots, no pixel matching, no browser required.
