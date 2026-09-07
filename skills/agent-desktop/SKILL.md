@@ -1,28 +1,28 @@
 ---
 name: agent-desktop
 version: 0.4.0
-tags: desktop-automation, accessibility, ai-agent, gui-automation, cli
+tags: computer-use, desktop-automation, accessibility, ai-agent, gui-automation, cli
 requirements:
   - agent-desktop
 description: >
-  Desktop automation via native OS accessibility trees using the agent-desktop CLI.
-  Use when an AI agent needs to observe, interact with, or automate desktop applications
+  Reliable computer use via native OS accessibility trees.
+  Use when an AI agent needs to see and operate desktop applications
   (click buttons, fill forms, navigate menus, read UI state, toggle checkboxes, scroll,
   drag, type text, take screenshots, manage windows, use clipboard, manage notifications).
   Covers 59 command names (55 operational; four held-input names fail closed until
   daemon ownership exists) across observation, interaction, keyboard/mouse, app
   lifecycle, notifications (macOS), clipboard, wait, session lifecycle, and a
   `skills` command that bundles docs straight from the binary.
-  Triggers on: "click button", "fill form", "open app", "read UI", "automate desktop",
-  "accessibility tree", "snapshot app", "type into field", "navigate menu", "toggle checkbox",
-  "take screenshot", "desktop automation", "agent-desktop", or any desktop GUI interaction task.
+  Triggers on: "click button", "fill form", "open app", "read UI", "computer use",
+  "operate desktop", "accessibility tree", "snapshot app", "type into field", "navigate menu",
+  "toggle checkbox", "take screenshot", "desktop automation", "agent-desktop", or any desktop GUI interaction task.
   Supports the macOS Phase 1 adapter, with Windows and Linux planned against
   the same core contracts.
 ---
 
 # agent-desktop
 
-CLI tool enabling AI agents to observe and control desktop applications via native OS accessibility trees.
+Computer-use tool that AI agents call to see and operate desktop applications via native OS accessibility trees.
 
 **Core principle:** agent-desktop is NOT an AI agent. It is a tool that AI agents invoke. It outputs structured JSON with ref-based element identifiers. The observation-action loop lives in the calling agent.
 

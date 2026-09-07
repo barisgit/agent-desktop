@@ -12,7 +12,7 @@ const AFTER_HELP: &str = include_str!("help_after.txt");
 #[command(
     name = "agent-desktop",
     version,
-    about = "Desktop automation CLI for AI agents",
+    about = "Reliable computer use for AI agents — see and operate desktop apps",
     long_about = None,
     before_help = BEFORE_HELP,
     after_help = AFTER_HELP,

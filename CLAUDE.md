@@ -39,7 +39,7 @@ Bypass for an emergency commit with `git commit --no-verify` or `SKIP_PRECOMMIT=
 
 ## Project Overview
 
-Cross-platform Rust CLI + MCP server enabling AI agents to observe and control desktop applications via native OS accessibility trees.
+Computer-use tool (CLI + C library) letting AI agents observe and operate desktop apps via native accessibility trees.
 
 ## Git & Commits
 
