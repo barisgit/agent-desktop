@@ -26,7 +26,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/slack-example.png" alt="agent-desktop real-world example — Slack accessibility tree with 97% token savings" width="900" />
+  <img src="docs/slack-example.png" alt="Slack accessibility snapshots: 30,743 tokens for a regular snapshot versus 383 for a skeleton overview, with focused drilling for controls" width="900" />
 </p>
 
 <a href="https://star-history.com/#lahfir/agent-desktop&Date">
