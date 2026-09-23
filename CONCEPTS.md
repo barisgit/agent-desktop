@@ -140,6 +140,11 @@ An explicit opt-in path that uses screen coordinates or physical input when sema
 
 Ref-targeted physical input lands on the topmost window at the resolved point, so core first ensures the target element's exact window is frontmost — the app being frontmost is not sufficient when the element lives in a background window of that app. Raw `--xy` input carries no window identity and therefore moves/clicks at the requested coordinates without focusing any application.
 
+### Background Pointer
+An opt-in pointer path (`--background` on `hover`, `mouse-move`, `mouse-click`) that delivers a mouse event to the process owning one exact window, instead of the shared OS pointer. It never moves the real cursor, activates the app, or changes keyboard focus, so it belongs to neither headless semantics nor headed physical input and is rejected alongside `--headed`.
+
+The target is always an exact window verified against its process instance just before delivery: a ref supplies it, raw coordinates must name it. Geometry is checked against the window's own bounds only, since the window server's hit test is bypassed and the window may be offscreen or covered. Whether the application acts on the event is its own decision, so the result is delivered-but-unverified and reports any frontmost-application change instead of claiming a silent success.
+
 ### FFI Ref-Action Parity
 The requirement that language bindings using refs follow the same strict resolution, actionability, and interaction-policy semantics as CLI ref commands.
 

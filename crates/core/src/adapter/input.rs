@@ -1,6 +1,6 @@
 use crate::{
-    AdapterError, ClipboardContent, ClipboardFormat, Deadline, DragParams, InteractionLease,
-    KeyCombo, MouseEvent,
+    AdapterError, BackgroundPointerReport, ClipboardContent, ClipboardFormat, Deadline, DragParams,
+    InteractionLease, KeyCombo, MouseEvent, WindowInfo,
 };
 
 /// `get_clipboard`/`set_clipboard` were removed pre-1.0 in favor of
@@ -13,6 +13,23 @@ pub trait InputOps: Send + Sync {
         _lease: &InteractionLease,
     ) -> Result<(), AdapterError> {
         Err(AdapterError::not_supported("mouse_event"))
+    }
+
+    /// Posts `event` straight to the process that owns `window` without moving
+    /// the system cursor, activating the app, or changing keyboard focus.
+    ///
+    /// Callers must have re-verified `window` (pid, process instance, and
+    /// exact window id) under `lease` and checked that the point lies inside
+    /// its bounds. Only `Move` and `Click` events are meaningful. The returned
+    /// report carries the frontmost application sampled before and after
+    /// delivery; the effect itself is never verified here.
+    fn background_mouse_event(
+        &self,
+        _window: &WindowInfo,
+        _event: MouseEvent,
+        _lease: &InteractionLease,
+    ) -> Result<BackgroundPointerReport, AdapterError> {
+        Err(AdapterError::not_supported("background_mouse_event"))
     }
 
     fn key_event(

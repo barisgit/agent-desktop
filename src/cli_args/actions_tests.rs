@@ -136,6 +136,44 @@ fn mouse_click_args_batch_json_without_modifiers_key_still_deserializes() {
 }
 
 #[test]
+fn background_pointer_flags_parse_on_hover_and_mouse_commands() {
+    let hover = HoverArgs::try_parse_from(["hover", "@s1:e1", "--background"]).unwrap();
+    let click = MouseClickArgs::try_parse_from([
+        "mouse-click",
+        "--background",
+        "--window-id",
+        "w-9555",
+        "--xy",
+        "10,20",
+    ])
+    .unwrap();
+    let moved = MouseMoveArgs::try_parse_from([
+        "mouse-move",
+        "--background",
+        "--window-id",
+        "w-9555",
+        "--xy",
+        "10,20",
+    ])
+    .unwrap();
+
+    assert!(hover.background && hover.window_id.is_none());
+    assert!(click.background);
+    assert_eq!(click.window_id.as_deref(), Some("w-9555"));
+    assert!(moved.background);
+    assert_eq!(moved.window_id.as_deref(), Some("w-9555"));
+}
+
+#[test]
+fn background_pointer_flags_default_off_for_cli_and_batch() {
+    let cli = MouseClickArgs::try_parse_from(["mouse-click", "--xy", "10,20"]).unwrap();
+    let batch: HoverArgs = serde_json::from_value(serde_json::json!({ "ref_id": "@e1" })).unwrap();
+
+    assert!(!cli.background && cli.window_id.is_none());
+    assert!(!batch.background && batch.window_id.is_none());
+}
+
+#[test]
 fn mouse_point_args_cli_modifiers_repeatable_flag_parses() {
     let args =
         MousePointArgs::try_parse_from(["mouse-down", "--xy", "10,20", "--modifiers", "ctrl"])

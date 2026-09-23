@@ -172,7 +172,7 @@ pub(crate) struct KeyComboArgs {
 pub(crate) struct HoverArgs {
     #[arg(
         value_name = "REF",
-        help = "Element ref to hover over; requires --headed"
+        help = "Element ref to hover over; requires --headed unless --background"
     )]
     pub ref_id: Option<String>,
     #[arg(
@@ -181,7 +181,10 @@ pub(crate) struct HoverArgs {
         help = "Snapshot ID required for a legacy bare @eN ref; omit for a qualified ref"
     )]
     pub snapshot: Option<String>,
-    #[arg(long, help = "Absolute coordinates as x,y; requires --headed")]
+    #[arg(
+        long,
+        help = "Absolute coordinates as x,y; requires --headed, or --background with --window-id"
+    )]
     pub xy: Option<String>,
     #[arg(
         long,
@@ -195,19 +198,51 @@ pub(crate) struct HoverArgs {
     )]
     #[serde(default = "default_ref_timeout_ms")]
     pub timeout_ms: u64,
+    #[arg(
+        long,
+        help = "Post the event to the target window's process without moving the real cursor, activating the app, or taking keyboard focus (macOS); conflicts with --headed"
+    )]
+    #[serde(default)]
+    pub background: bool,
+    #[arg(
+        long = "window-id",
+        value_name = "WINDOW_ID",
+        help = "Exact target window for --background --xy (from list-windows, e.g. w-9555)"
+    )]
+    #[serde(default)]
+    pub window_id: Option<String>,
 }
 
 #[derive(Parser, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct MouseMoveArgs {
-    #[arg(long, help = "Absolute coordinates as x,y; requires --headed")]
+    #[arg(
+        long,
+        help = "Absolute coordinates as x,y; requires --headed, or --background with --window-id"
+    )]
     pub xy: String,
+    #[arg(
+        long,
+        help = "Post the event to the target window's process without moving the real cursor, activating the app, or taking keyboard focus (macOS); conflicts with --headed"
+    )]
+    #[serde(default)]
+    pub background: bool,
+    #[arg(
+        long = "window-id",
+        value_name = "WINDOW_ID",
+        help = "Exact target window for --background --xy (from list-windows, e.g. w-9555)"
+    )]
+    #[serde(default)]
+    pub window_id: Option<String>,
 }
 
 #[derive(Parser, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct MouseClickArgs {
-    #[arg(long, help = "Absolute coordinates as x,y; requires --headed")]
+    #[arg(
+        long,
+        help = "Absolute coordinates as x,y; requires --headed, or --background with --window-id"
+    )]
     pub xy: String,
     #[arg(
         long,
@@ -226,6 +261,19 @@ pub(crate) struct MouseClickArgs {
     )]
     #[serde(default)]
     pub modifiers: Vec<String>,
+    #[arg(
+        long,
+        help = "Post the event to the target window's process without moving the real cursor, activating the app, or taking keyboard focus (macOS); conflicts with --headed"
+    )]
+    #[serde(default)]
+    pub background: bool,
+    #[arg(
+        long = "window-id",
+        value_name = "WINDOW_ID",
+        help = "Exact target window for --background --xy (from list-windows, e.g. w-9555)"
+    )]
+    #[serde(default)]
+    pub window_id: Option<String>,
 }
 
 #[derive(Parser, Debug, Deserialize)]

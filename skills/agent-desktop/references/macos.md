@@ -77,6 +77,7 @@ Ref commands use `ActionRequest { action, policy }`. The default policy forbids 
 - `click`, `right-click`, `type`, `clear`, and `scroll` use semantic AX delivery headlessly and physical-first delivery with `--headed`.
 - `expand`, `collapse`, `set-value`, `select`, `toggle`, `check`, `uncheck`, `focus`, and `scroll-to` remain semantic under `--headed` after any core focus precondition.
 - `press`, `hover`, `drag`, `mouse-move`, `mouse-click`, and `mouse-wheel` are explicit physical input; cursor-moving commands require `--headed`.
+- `hover`, `mouse-move`, and `mouse-click` accept `--background`: the event goes to one exact window's process through `CGEventPostToPid`, tagged with `kCGMouseEventWindowUnderMousePointer` and `kCGMouseEventWindowUnderMousePointerThatCanHandleThisEvent`, so the cursor, app activation, and keyboard focus are untouched. Results are `delivered_unverified` with the frontmost app sampled before and after delivery; confirm the effect with `snapshot`. Sandboxed apps may drop these events, and Electron honors background hover only while the window stays its app's main window.
 - Raw coordinates never trigger focus because they carry no window identity. Held-input commands are reserved and fail closed until a daemon owns their lifetime.
 - FFI ref-action callers get the same strict headless `type` default; direct-handle `ad_execute_action` is lower-level and applies the supplied policy verbatim.
 - If a command would need a forbidden physical path, it returns a structured error with a recovery hint.

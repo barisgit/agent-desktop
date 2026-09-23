@@ -193,7 +193,11 @@ agent-desktop --headed hover --xy 500,300       # Cursor to coordinates
 agent-desktop --headed drag --from @s8f3k2p9:e1 --to @s8f3k2p9:e5 # Drag between elements
 agent-desktop --headed mouse-click --xy 500,300 # Click at coordinates
 agent-desktop --headed mouse-move --xy 100,200  # Move cursor
+agent-desktop hover @s8f3k2p9:e5 --background   # Hover a background window; real cursor and focus untouched (macOS)
+agent-desktop mouse-click --background --window-id w-9555 --xy 500,300 # Click inside one exact background window
 ```
+
+`--background` (macOS; `hover`, `mouse-move`, `mouse-click`) posts the event straight to the process owning one exact window: the real cursor does not move, the app is not activated or raised, and keyboard focus stays put. A ref hover derives the process and window from the ref; `--xy` needs `--window-id`, and the point must lie inside that window (it may be offscreen or covered). It cannot be combined with `--headed`. Success is `delivered_unverified` (`retry: unsafe`) with `data.background.focus_change` (`unchanged`, `changed`, or `unknown`); the app may ignore the event, so confirm the effect with a fresh `snapshot`. Example: hover an Electron sidebar header with `--background`, re-snapshot, then `click` the revealed button by ref.
 
 `key-down`, `key-up`, `mouse-down`, and `mouse-up` return `ACTION_NOT_SUPPORTED` until a stateful daemon can own held-input lifetime. Use `press`, `mouse-click`, or `drag` instead.
 

@@ -9,6 +9,8 @@ mod keyboard_event;
 pub(crate) mod keyboard_map;
 pub(crate) mod mouse;
 #[cfg(target_os = "macos")]
+mod mouse_background;
+#[cfg(target_os = "macos")]
 mod mouse_drag;
 #[cfg(target_os = "macos")]
 mod mouse_drag_state;
