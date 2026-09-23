@@ -40,6 +40,13 @@ int main(void) {
                             NSMakeRect(1920, 1080, 1440, 900)));
         assert(NSEqualRects(ADTopLeftRectAtHeight(NSMakeRect(0, 0, 1920, 1080), 1080),
                             NSMakeRect(0, 0, 1920, 1080)));
+        CGPoint translated = ADTranslatedTargetPoint(CGPointMake(120, 140),
+                                                      CGRectMake(100, 100, 400, 300),
+                                                      CGRectMake(500, 300, 400, 300));
+        assert(CGPointEqualToPoint(translated, CGPointMake(520, 340)));
+        CGPoint label = ADLabelPositionInFrame(790, 590, 232, 38,
+                                               NSMakeRect(0, 0, 800, 600));
+        assert(CGPointEqualToPoint(label, CGPointMake(540, 534)));
         bool (^isRenderer)(uint32_t) = ^bool(uint32_t pid) { return pid == 30 || pid == 31; };
         CGPoint point = CGPointMake(-1200, -400);
         CGRect bounds = CGRectMake(-1440, -900, 1440, 900);

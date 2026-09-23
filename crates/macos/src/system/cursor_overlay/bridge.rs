@@ -6,6 +6,7 @@ use std::ffi::{CString, c_char};
 
 const REDUCE_MOTION: u8 = 1 << 2;
 const HIGHLIGHT: u8 = 1 << 3;
+const LAYOUT_DEFERRED: u8 = 1 << 4;
 
 #[repr(C)]
 struct NativeCursorStyle {
@@ -35,8 +36,6 @@ struct NativeRenderConfig {
 
 unsafe extern "C" {
     fn agent_desktop_cursor_overlay_target(pid: u32, window: u32, x: f64, y: f64);
-    fn agent_desktop_cursor_overlay_target_visible() -> bool;
-    fn agent_desktop_cursor_overlay_initial_point(output: *mut f64) -> bool;
     fn agent_desktop_cursor_overlay_screen(x: f64, y: f64, output: *mut f64) -> bool;
     fn agent_desktop_cursor_overlay_run(
         frames: *const NativeCursorFrame,
@@ -66,20 +65,6 @@ pub(super) fn drag_active() -> bool {
     unsafe { agent_desktop_cursor_overlay_drag_active() }
 }
 
-pub(super) fn initial_point() -> Result<Point, AdapterError> {
-    let mut output = [0.0; 2];
-    if !unsafe { agent_desktop_cursor_overlay_initial_point(output.as_mut_ptr()) } {
-        return Err(AdapterError::new(
-            ErrorCode::ActionFailed,
-            "macOS cursor overlay could not select an initial position",
-        ));
-    }
-    Ok(Point {
-        x: output[0],
-        y: output[1],
-    })
-}
-
 pub(super) fn screen_at(point: &Point) -> Result<(Rect, u32, bool), AdapterError> {
     let mut output = [0.0; 6];
     if !unsafe { agent_desktop_cursor_overlay_screen(point.x, point.y, output.as_mut_ptr()) } {
@@ -100,7 +85,7 @@ pub(super) fn screen_at(point: &Point) -> Result<(Rect, u32, bool), AdapterError
     ))
 }
 
-pub(super) fn prepare(instruction: &CursorOverlayInstruction) -> bool {
+pub(super) fn prepare(instruction: &CursorOverlayInstruction) {
     let (pid, window) = instruction.window().map_or((0, 0), |(pid, window)| {
         let number = super::super::window_resolve::parse_window_number(window)
             .and_then(|number| u32::try_from(number).ok())
@@ -115,11 +100,6 @@ pub(super) fn prepare(instruction: &CursorOverlayInstruction) -> bool {
             instruction.destination().y,
         )
     };
-    if !unsafe { agent_desktop_cursor_overlay_target_visible() } {
-        hide();
-        return false;
-    }
-    true
 }
 
 pub(super) fn run(
@@ -127,7 +107,7 @@ pub(super) fn run(
     fps: u32,
     instruction: &CursorOverlayInstruction,
     reduce_motion: bool,
-    bubble: &Rect,
+    bubble: Option<&Rect>,
 ) -> Result<(), AdapterError> {
     let frames = poses
         .iter()
@@ -152,6 +132,15 @@ pub(super) fn run(
     if target.is_some() {
         flags |= HIGHLIGHT;
     }
+    if bubble.is_none() {
+        flags |= LAYOUT_DEFERRED;
+    }
+    let bubble = bubble.cloned().unwrap_or(Rect {
+        x: 0.0,
+        y: 0.0,
+        width: 0.0,
+        height: 0.0,
+    });
     let config = NativeRenderConfig {
         frame_seconds: 1.0 / f64::from(fps),
         label: label
@@ -191,12 +180,12 @@ pub(super) fn stop() {
     unsafe { agent_desktop_cursor_overlay_stop() }
 }
 
-pub(super) fn rest() {
-    unsafe { agent_desktop_cursor_overlay_rest() }
-}
-
 pub(super) fn hide() {
     unsafe { agent_desktop_cursor_overlay_hide() }
+}
+
+pub(super) fn rest() {
+    unsafe { agent_desktop_cursor_overlay_rest() }
 }
 
 pub(super) fn show() {

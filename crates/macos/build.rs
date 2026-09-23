@@ -8,6 +8,7 @@ fn main() {
     println!("cargo:rerun-if-changed=src/system/cursor_overlay_bridge.m");
     println!("cargo:rerun-if-changed=src/system/cursor_overlay_chrome_bridge.m");
     println!("cargo:rerun-if-changed=src/system/cursor_overlay_chrome.h");
+    println!("cargo:rerun-if-changed=src/system/cursor_overlay_lifecycle.h");
     println!("cargo:rerun-if-changed=src/system/cursor_overlay_display_bridge.m");
     println!("cargo:rerun-if-env-changed=TARGET");
     println!("cargo:rerun-if-env-changed=MACOSX_DEPLOYMENT_TARGET");

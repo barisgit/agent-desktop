@@ -5,6 +5,27 @@
 static uint32_t ADTargetPid = 0;
 static uint32_t ADTargetWindow = 0;
 static CGPoint ADTargetPoint;
+static CGRect ADTargetBounds;
+static bool ADTargetBoundsKnown = false;
+static CGPoint ADVisibleTargetPoint;
+
+static bool ADWindowBoundsInWindows(NSArray *windows, uint32_t pid, uint32_t number,
+                                    CGRect *output) {
+    for (NSDictionary *window in windows) {
+        if ([window[(id)kCGWindowOwnerPID] unsignedIntValue] != pid
+            || [window[(id)kCGWindowNumber] unsignedIntValue] != number) {
+            continue;
+        }
+        return CGRectMakeWithDictionaryRepresentation(
+            (__bridge CFDictionaryRef)window[(id)kCGWindowBounds], output);
+    }
+    return false;
+}
+
+static CGPoint ADTranslatedTargetPoint(CGPoint point, CGRect from, CGRect to) {
+    return CGPointMake(point.x + to.origin.x - from.origin.x,
+                       point.y + to.origin.y - from.origin.y);
+}
 
 static bool ADTargetVisibleInWindows(NSArray *windows, uint32_t pid, uint32_t number,
                                      CGPoint point, bool (^isRenderer)(uint32_t)) {
@@ -30,6 +51,14 @@ void agent_desktop_cursor_overlay_target(uint32_t pid, uint32_t window, double x
     ADTargetPid = pid;
     ADTargetWindow = window;
     ADTargetPoint = CGPointMake(x, y);
+    ADVisibleTargetPoint = ADTargetPoint;
+    ADTargetBoundsKnown = false;
+    if (pid == 0 || window == 0) {
+        return;
+    }
+    NSArray *windows = CFBridgingRelease(CGWindowListCopyWindowInfo(
+        kCGWindowListOptionAll | kCGWindowListExcludeDesktopElements, kCGNullWindowID));
+    ADTargetBoundsKnown = ADWindowBoundsInWindows(windows, pid, window, &ADTargetBounds);
 }
 
 bool agent_desktop_cursor_overlay_target_visible(void) {
@@ -43,8 +72,15 @@ bool agent_desktop_cursor_overlay_target_visible(void) {
         }
         NSArray *windows = CFBridgingRelease(CGWindowListCopyWindowInfo(
             kCGWindowListOptionOnScreenOnly | kCGWindowListExcludeDesktopElements, kCGNullWindowID));
+        CGRect currentBounds;
+        if (!ADWindowBoundsInWindows(windows, ADTargetPid, ADTargetWindow, &currentBounds)) {
+            return false;
+        }
+        ADVisibleTargetPoint = ADTargetBoundsKnown
+            ? ADTranslatedTargetPoint(ADTargetPoint, ADTargetBounds, currentBounds)
+            : ADTargetPoint;
         NSRunningApplication *renderer = NSRunningApplication.currentApplication;
-        return ADTargetVisibleInWindows(windows, ADTargetPid, ADTargetWindow, ADTargetPoint,
+        return ADTargetVisibleInWindows(windows, ADTargetPid, ADTargetWindow, ADVisibleTargetPoint,
             ^bool(uint32_t owner) {
                 if (owner == (uint32_t)renderer.processIdentifier) {
                     return true;
@@ -53,6 +89,15 @@ bool agent_desktop_cursor_overlay_target_visible(void) {
                 return renderer.executableURL != nil && [renderer.executableURL isEqual:peer.executableURL];
             });
     }
+}
+
+bool agent_desktop_cursor_overlay_target_point(double *output) {
+    if (output == NULL) {
+        return false;
+    }
+    output[0] = ADVisibleTargetPoint.x;
+    output[1] = ADVisibleTargetPoint.y;
+    return true;
 }
 
 static NSRect ADTopLeftRectAtHeight(NSRect frame, double mainHeight) {
@@ -76,20 +121,30 @@ static NSScreen *ADScreenAt(double x, double y) {
     return nil;
 }
 
-bool agent_desktop_cursor_overlay_initial_point(double *output) {
+static CGPoint ADLabelPositionInFrame(double x, double y, double width, double height,
+                                          NSRect frame) {
+    double right = NSMaxX(frame);
+    double bottom = NSMaxY(frame);
+    double placedX = x + 18.0 + width <= right ? x + 18.0 : x - width - 18.0;
+    double placedY = y + 18.0 + height <= bottom ? y + 18.0 : y - height - 18.0;
+    return CGPointMake(MAX(frame.origin.x, MIN(placedX, MAX(right - width, frame.origin.x))),
+                       MAX(frame.origin.y, MIN(placedY, MAX(bottom - height, frame.origin.y))));
+}
+
+bool agent_desktop_cursor_overlay_label_position(double x, double y, double width,
+                                                 double height, double *output) {
     if (output == NULL) {
         return false;
     }
-    @autoreleasepool {
-        NSScreen *screen = NSScreen.mainScreen;
-        if (screen == nil) {
-            return false;
-        }
-        NSRect frame = ADTopLeftRect(screen.visibleFrame);
-        output[0] = NSMidX(frame);
-        output[1] = NSMidY(frame);
-        return true;
+    NSScreen *screen = ADScreenAt(x, y);
+    if (screen == nil) {
+        return false;
     }
+    CGPoint position = ADLabelPositionInFrame(x, y, width, height,
+                                              ADTopLeftRect(screen.visibleFrame));
+    output[0] = position.x;
+    output[1] = position.y;
+    return true;
 }
 
 bool agent_desktop_cursor_overlay_screen(double x,
