@@ -43,6 +43,17 @@ static CGPoint ADDragLast = {0.0, 0.0};
 static CFTimeInterval ADDragArmDeadline = 0.0;
 static CFTimeInterval ADDragDeadline = 0.0;
 
+extern bool agent_desktop_cursor_overlay_target_visible(void);
+void agent_desktop_cursor_overlay_hide(void);
+
+static bool ADEnsureTargetVisible(void) {
+    if (agent_desktop_cursor_overlay_target_visible()) {
+        return true;
+    }
+    agent_desktop_cursor_overlay_hide();
+    return false;
+}
+
 static void ADMoveCursor(const AgentDesktopCursorFrame *frame, double mainHeight);
 
 static void ADDragCancel(void) {
@@ -170,6 +181,12 @@ static NSWindow *ADBubble(void) {
 
 void agent_desktop_cursor_overlay_idle(void) {
     @autoreleasepool {
+        static CFTimeInterval checked = 0;
+        CFTimeInterval now = CACurrentMediaTime();
+        if (now - checked >= 0.1) {
+            ADEnsureTargetVisible();
+            checked = now;
+        }
         ADDragPoll();
         ADPump(NSApplication.sharedApplication);
     }
@@ -266,6 +283,9 @@ bool agent_desktop_cursor_overlay_drag_active(void) {
 }
 
 void agent_desktop_cursor_overlay_show(void) {
+    if (!ADEnsureTargetVisible()) {
+        return;
+    }
     [ADCursorWindow orderFrontRegardless];
     if (ADBubbleText.stringValue.length > 0) {
         [ADBubbleWindow orderFrontRegardless];
@@ -289,6 +309,9 @@ bool agent_desktop_cursor_overlay_run(const AgentDesktopCursorFrame *frames,
     }
     @try {
         @autoreleasepool {
+            if (!ADEnsureTargetVisible()) {
+                return true;
+            }
             NSApplication *app = NSApplication.sharedApplication;
             [app setActivationPolicy:NSApplicationActivationPolicyAccessory];
             [app finishLaunching];
@@ -329,6 +352,9 @@ bool agent_desktop_cursor_overlay_run(const AgentDesktopCursorFrame *frames,
             bool highlighted = (config->flags & ADHighlightCue) == 0 || reduceMotion;
 
             for (size_t index = 0; index < movementFrameCount; index += 1) {
+                if (index % 6 == 0 && !ADEnsureTargetVisible()) {
+                    return true;
+                }
                 ADMoveCursor(&frames[index], mainHeight);
                 if (followsBubble) {
                     [ADBubbleWindow setFrameOrigin:NSMakePoint(
@@ -339,6 +365,9 @@ bool agent_desktop_cursor_overlay_run(const AgentDesktopCursorFrame *frames,
                 if (index + 1 < movementFrameCount) {
                     [NSThread sleepForTimeInterval:config->frameSeconds];
                 }
+            }
+            if (!ADEnsureTargetVisible()) {
+                return true;
             }
             if (playsRipple) {
                 ADRipplePlay(ADRipple);

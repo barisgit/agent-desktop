@@ -28,6 +28,22 @@ fn accepted_stream_waits_for_a_delayed_control() {
     result.unwrap();
 }
 
+#[test]
+fn target_control_decodes_with_negative_display_coordinates() {
+    let instruction = instruction(
+        Point {
+            x: -1200.0,
+            y: -400.0,
+        },
+        true,
+    )
+    .with_window((agent_desktop_core::ProcessId::new(10), "w-42".into()));
+    let control = CursorOverlayControl::present("run-target".into(), instruction)
+        .with_agent_id(Some("worker".into()));
+    let payload = serde_json::to_vec(&control).unwrap();
+    assert_eq!(read_control(payload.as_slice()).unwrap(), control);
+}
+
 fn state(at: Option<Point>) -> OverlayState {
     OverlayState {
         at,

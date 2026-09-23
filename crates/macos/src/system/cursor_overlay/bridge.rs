@@ -34,6 +34,8 @@ struct NativeRenderConfig {
 }
 
 unsafe extern "C" {
+    fn agent_desktop_cursor_overlay_target(pid: u32, window: u32, x: f64, y: f64);
+    fn agent_desktop_cursor_overlay_target_visible() -> bool;
     fn agent_desktop_cursor_overlay_initial_point(output: *mut f64) -> bool;
     fn agent_desktop_cursor_overlay_screen(x: f64, y: f64, output: *mut f64) -> bool;
     fn agent_desktop_cursor_overlay_run(
@@ -96,6 +98,28 @@ pub(super) fn screen_at(point: &Point) -> Result<(Rect, u32, bool), AdapterError
         (output[4] as u32).clamp(60, 120),
         output[5] != 0.0,
     ))
+}
+
+pub(super) fn prepare(instruction: &CursorOverlayInstruction) -> bool {
+    let (pid, window) = instruction.window().map_or((0, 0), |(pid, window)| {
+        let number = super::super::window_resolve::parse_window_number(window)
+            .and_then(|number| u32::try_from(number).ok())
+            .unwrap_or(0);
+        (pid.get(), number)
+    });
+    unsafe {
+        agent_desktop_cursor_overlay_target(
+            pid,
+            window,
+            instruction.destination().x,
+            instruction.destination().y,
+        )
+    };
+    if !unsafe { agent_desktop_cursor_overlay_target_visible() } {
+        hide();
+        return false;
+    }
+    true
 }
 
 pub(super) fn run(

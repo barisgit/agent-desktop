@@ -119,7 +119,7 @@ pub(crate) fn cancel_drag(adapter: &dyn PlatformAdapter, context: &CommandContex
     let _ = update(adapter, &control);
 }
 
-fn send(
+pub(crate) fn send(
     adapter: &dyn PlatformAdapter,
     context: &CommandContext,
     instruction: Result<super::CursorOverlayInstruction, AdapterError>,
@@ -161,7 +161,7 @@ fn enabled_session(context: &CommandContext) -> Option<&str> {
 
 fn update(adapter: &dyn PlatformAdapter, control: &super::CursorOverlayControl) -> bool {
     if let Err(error) = adapter.update_cursor_overlay(control) {
-        tracing::warn!(code = %error.code.as_str(), "agent cursor presentation was skipped");
+        tracing::warn!(code = %error.code.as_str(), message = %error.message, detail = ?error.platform_detail, "agent cursor presentation was skipped");
         return false;
     }
     true

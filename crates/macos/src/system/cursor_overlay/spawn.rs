@@ -246,7 +246,13 @@ fn send_until(
     })?;
     let mut acknowledgement = [0_u8; 1];
     match stream.read_exact(&mut acknowledgement) {
-        Ok(()) => Ok(true),
+        Ok(()) if acknowledgement == [1] => Ok(true),
+        Ok(()) => Err(AdapterError::internal(match acknowledgement[0] {
+            0 => "macOS cursor overlay could not decode the control",
+            2 => "macOS cursor overlay rejected the session or agent route",
+            3 => "macOS cursor overlay renderer rejected the control",
+            _ => "macOS cursor overlay returned an invalid acknowledgement",
+        })),
         Err(error)
             if control.instruction().is_some_and(|instruction| {
                 instruction.phase() == agent_desktop_core::CursorPhase::Travel

@@ -71,6 +71,7 @@ fn run() -> Result<(), AdapterError> {
                     continue;
                 }
                 let Ok(control) = read_control(&mut stream) else {
+                    let _ = stream.write_all(&[0]);
                     continue;
                 };
                 if control.session_id() != initial.session_id()
@@ -78,6 +79,7 @@ fn run() -> Result<(), AdapterError> {
                         && !(control.agent_id().is_none()
                             && (control.is_transient() || control.is_disable())))
                 {
+                    let _ = stream.write_all(&[2]);
                     continue;
                 }
                 if control.is_disable() {
@@ -88,7 +90,6 @@ fn run() -> Result<(), AdapterError> {
                 }
                 quiet_since = std::time::Instant::now();
                 if state.resting {
-                    bridge::show();
                     state.resting = false;
                 }
                 let outcome = handle(&control, &mut state);
@@ -96,6 +97,7 @@ fn run() -> Result<(), AdapterError> {
                     let _ = stream.write_all(&[1]);
                 }
                 if outcome.is_err() {
+                    let _ = stream.write_all(&[3]);
                     continue;
                 }
             }
@@ -154,6 +156,10 @@ fn handle(control: &CursorOverlayControl, state: &mut OverlayState) -> Result<bo
         owned = CursorOverlayInstruction::new(bridge::initial_point()?, &config, false)?;
         &owned
     };
+    if !bridge::prepare(instruction) {
+        state.at = None;
+        return Ok(true);
+    }
     render(instruction, state)?;
     apply_landing_memory(control, state, Some(instruction));
     Ok(true)
