@@ -131,6 +131,12 @@ pub(crate) struct ScrollArgs {
     )]
     #[serde(default = "default_ref_timeout_ms")]
     pub timeout_ms: u64,
+    #[arg(
+        long,
+        help = "Post line scroll-wheel events at the element's center to its window's process instead of the semantic AX scroll; works on views that advertise only ScrollTo, never moves the real cursor or activates the app (macOS); conflicts with --headed"
+    )]
+    #[serde(default)]
+    pub background: bool,
 }
 
 #[derive(Parser, Debug, Deserialize)]

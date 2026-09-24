@@ -1,8 +1,8 @@
 use serde_json::{Value, json};
 
 use crate::{
-    AdapterError, AppError, BackgroundPointerReport, DeliverySemantics, ErrorCode, Modifier,
-    MouseButton, MouseEvent, MouseEventKind, Point, RefEntry, WindowInfo, WindowState,
+    AdapterError, AppError, BackgroundPointerReport, DeliverySemantics, Direction, ErrorCode,
+    Modifier, MouseButton, MouseEvent, MouseEventKind, Point, RefEntry, WindowInfo, WindowState,
     adapter::PlatformAdapter,
     commands::{helpers, pointer_action::point_deadline, window_target},
     context::CommandContext,
@@ -28,6 +28,32 @@ pub enum BackgroundPointerAction {
         count: u32,
         modifiers: Vec<Modifier>,
     },
+    /// Scroll-wheel lines, following the `mouse-wheel` convention: positive
+    /// `dy` scrolls up and positive `dx` scrolls left.
+    Wheel {
+        dx: f64,
+        dy: f64,
+        modifiers: Vec<Modifier>,
+    },
+}
+
+impl BackgroundPointerAction {
+    /// The wheel equivalent of `scroll --direction --amount`: `amount` lines
+    /// along one axis.
+    pub fn scroll(direction: Direction, amount: u32) -> Self {
+        let lines = f64::from(amount);
+        let (dx, dy) = match direction {
+            Direction::Up => (0.0, lines),
+            Direction::Down => (0.0, -lines),
+            Direction::Left => (lines, 0.0),
+            Direction::Right => (-lines, 0.0),
+        };
+        Self::Wheel {
+            dx,
+            dy,
+            modifiers: Vec::new(),
+        }
+    }
 }
 
 pub struct BackgroundPointerArgs {
@@ -41,8 +67,13 @@ struct ResolvedTarget {
     point: Point,
 }
 
-/// Opt-in background pointer delivery shared by `hover`, `mouse-move`, and
-/// `mouse-click` when they run with `--background`.
+/// Opt-in background pointer delivery shared by `hover`, `mouse-move`,
+/// `mouse-click`, `mouse-wheel`, and `scroll` when they run with
+/// `--background`.
+///
+/// `scroll --background` deliberately skips the semantic scroll's
+/// supported-action gate: it posts wheel events at the element's center, so
+/// it also reaches views such as web areas that advertise only `ScrollTo`.
 ///
 /// The event is posted straight to the process that owns one exact window, so
 /// the user's real cursor never moves and the window is never raised. Keeping
@@ -72,6 +103,9 @@ pub fn execute(
     }
     if let BackgroundPointerAction::Click { count, .. } = &args.action {
         crate::validate_mouse_click_count(*count)?;
+    }
+    if let BackgroundPointerAction::Wheel { dx, dy, .. } = &args.action {
+        validate_wheel(*dx, *dy)?;
     }
     helpers::validate_post_action_wait(context)?;
     let deadline = point_deadline(args.timeout_ms)?;
@@ -198,6 +232,15 @@ fn ensure_point_in_window(point: &Point, window: &WindowInfo) -> Result<(), AppE
     .into())
 }
 
+fn validate_wheel(dx: f64, dy: f64) -> Result<(), AppError> {
+    if dx.is_finite() && dy.is_finite() && (dx != 0.0 || dy != 0.0) {
+        return Ok(());
+    }
+    Err(AppError::invalid_input(
+        "Background wheel deltas must be finite and not both zero",
+    ))
+}
+
 fn mouse_event(action: &BackgroundPointerAction, point: Point) -> MouseEvent {
     match action {
         BackgroundPointerAction::Hover | BackgroundPointerAction::Move => MouseEvent {
@@ -214,6 +257,15 @@ fn mouse_event(action: &BackgroundPointerAction, point: Point) -> MouseEvent {
             kind: MouseEventKind::Click { count: *count },
             point,
             button: button.clone(),
+            modifiers: modifiers.clone(),
+        },
+        BackgroundPointerAction::Wheel { dx, dy, modifiers } => MouseEvent {
+            kind: MouseEventKind::Wheel {
+                delta_x: *dx,
+                delta_y: *dy,
+            },
+            point,
+            button: MouseButton::Left,
             modifiers: modifiers.clone(),
         },
     }
@@ -234,6 +286,9 @@ fn response(
         BackgroundPointerAction::Hover => json!({ "hovered": true }),
         BackgroundPointerAction::Move => json!({ "moved": true }),
         BackgroundPointerAction::Click { count, .. } => json!({ "clicked": true, "count": count }),
+        BackgroundPointerAction::Wheel { dx, dy, .. } => {
+            json!({ "scrolled": true, "dy": dy, "dx": dx })
+        }
     };
     response["x"] = json!(point.x);
     response["y"] = json!(point.y);

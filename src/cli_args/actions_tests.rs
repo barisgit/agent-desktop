@@ -229,3 +229,34 @@ fn coordinate_flags_accept_negative_coordinates() {
     assert_eq!(drag.target.from_xy.as_deref(), Some("-5,6"));
     assert_eq!(drag.target.to_xy.as_deref(), Some("-7,-8"));
 }
+
+#[test]
+fn background_wheel_flags_parse_on_mouse_wheel_and_scroll() {
+    use crate::cli_args::mouse_wheel::MouseWheelArgs;
+
+    let wheel = MouseWheelArgs::try_parse_from([
+        "mouse-wheel",
+        "--background",
+        "--window-id",
+        "w-9555",
+        "--x",
+        "-1580.5",
+        "--y",
+        "-20",
+        "--dy",
+        "-5",
+    ])
+    .unwrap();
+    assert!(wheel.background);
+    assert_eq!(wheel.window_id.as_deref(), Some("w-9555"));
+    assert_eq!((wheel.x, wheel.y, wheel.dy), (-1580.5, -20.0, -5.0));
+
+    let scroll = ScrollArgs::try_parse_from(["scroll", "@s1:e1", "--background"]).unwrap();
+    assert!(scroll.background);
+
+    let batch: MouseWheelArgs =
+        serde_json::from_value(serde_json::json!({ "x": 1.0, "y": 2.0 })).unwrap();
+    assert!(!batch.background && batch.window_id.is_none());
+    let batch: ScrollArgs = serde_json::from_value(serde_json::json!({ "ref_id": "@e1" })).unwrap();
+    assert!(!batch.background);
+}

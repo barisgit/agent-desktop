@@ -10,6 +10,7 @@ applies_when:
   - "Hovering or clicking inside a window that is hidden, offscreen, or behind other windows"
   - "Revealing hover-only controls (for example VS Code Explorer header actions) without taking the user's cursor"
   - "Debugging a --background command that returned ok but had no visible effect"
+  - "Scrolling a background view that advertises only ScrollTo (for example Outlook's reading pane web area)"
 tags: [background-pointer, cgeventposttopid, skylight, electron, hover, delivery-semantics, macos]
 ---
 
@@ -22,7 +23,8 @@ Explorer header (New File, New Folder, ...) is the motivating case: with the
 window on a hidden AeroSpace workspace, the buttons never appear, and headed
 hover would move the user's cursor and raise the window.
 
-`--background` on `hover`, `mouse-move`, and `mouse-click` posts the event to
+`--background` on `hover`, `mouse-move`, `mouse-click`, `mouse-wheel`, and
+`scroll` posts the event to
 the process that owns one exact window. It never uses the HID tap,
 `CGWarpMouseCursorPosition`, `NSRunningApplication.activate`, or
 `_SLPSSetFrontProcessWithOptions` on the target.
@@ -117,6 +119,30 @@ returned nothing while Comet (Chromium) was frontmost, so every report said
 Private symbols are resolved with `dlopen`/`dlsym` once per process
 (`input/skylight.rs`); a missing symbol degrades that layer and never fails
 the command.
+
+## Scroll wheel
+
+`mouse-wheel --background --window-id` and `scroll <ref> --background` post
+scroll-wheel events through the same layers. Motivating case: Outlook's
+reading pane is a web area that advertises only `ScrollTo`, so the semantic
+`scroll` rejects it before any input, and the headed wheel moves the user's
+pointer. `scroll --background` does not alias `ScrollTo` to `Scroll` or relax
+the semantic gate; it is a separate wheel path aimed at the element's center.
+
+- **Units.** Non-continuous line units (`CGEventCreateScrollWheelEvent`,
+  `kCGScrollEventUnitLine`), the same units and 10-line chunks as the headed
+  wheel, with no scroll phases or momentum. AppKit and Chromium both convert
+  a line delta to their own per-line distance. background-computer-use posts
+  pixel units (650 px per page) instead; switch only if line events are
+  ignored live.
+- **Routing.** CoreGraphics keeps fields 91/92 only on mouse events and
+  drops them on scroll events, so a wheel names its window through `route`
+  (40, 51, 58, and `CGEventSetWindowLocation`). Without `route` it is a bare
+  pid-targeted wheel at the global location. With `route`, a `mouseMoved` at
+  the point precedes the wheel so hover-tracking scroll views (Chromium)
+  see the pointer inside them.
+- **Signs.** `scroll --direction` uses the `mouse-wheel` convention: `down`
+  is negative `dy`, `right` is negative `dx`.
 
 ## Risks
 

@@ -196,9 +196,11 @@ agent-desktop --headed mouse-click --xy 500,300 # Click at coordinates
 agent-desktop --headed mouse-move --xy 100,200  # Move cursor
 agent-desktop hover @s8f3k2p9:e5 --background   # Opt-in synthetic hover in a background window; cursor stays put (macOS)
 agent-desktop mouse-click --background --window-id w-9555 --xy 500,300 # Click inside one exact background window
+agent-desktop scroll @s8f3k2p9:e7 --background --direction down # Wheel-scroll a background element, even one that only advertises ScrollTo
+agent-desktop mouse-wheel --background --window-id w-9555 --x 500 --y 300 --dy -5 # Wheel inside one exact background window
 ```
 
-`--background` (macOS; `hover`, `mouse-move`, `mouse-click`) is an explicit opt-in, best-effort synthetic-input mode: it posts the event to the process owning one exact window through private SkyLight SPI. The real cursor does not move and the window is not raised, but focus preservation is best effort: the target may activate itself, so read `data.background.focus_change` (`unchanged`, `restored`, `changed`, `unknown`) and `focus_guard`. A ref derives the process and window; `--xy` needs `--window-id` and a point inside that window (it may be offscreen or covered). It cannot be combined with `--headed`. Success is `delivered_unverified` (`retry: unsafe`); confirm the effect with a fresh `snapshot`. Details: [background-input.md](references/background-input.md).
+`--background` (macOS; `hover`, `mouse-move`, `mouse-click`, `mouse-wheel`, `scroll`) is an explicit opt-in, best-effort synthetic-input mode: it posts the event to the process owning one exact window through private SkyLight SPI. The real cursor does not move and the window is not raised, but focus preservation is best effort: the target may activate itself, so read `data.background.focus_change` (`unchanged`, `restored`, `changed`, `unknown`) and `focus_guard`. A ref hover or `scroll` derives the process and window from the ref (`scroll --background` posts wheel lines at the element's center instead of the AX scroll); coordinates need `--window-id` and a point inside that window (it may be offscreen or covered). It cannot be combined with `--headed`. Success is `delivered_unverified` (`retry: unsafe`); confirm the effect with a fresh `snapshot`. Details: [background-input.md](references/background-input.md).
 
 `key-down`, `key-up`, `mouse-down`, and `mouse-up` return `ACTION_NOT_SUPPORTED` until a stateful daemon can own held-input lifetime. Use `press`, `mouse-click`, or `drag` instead.
 

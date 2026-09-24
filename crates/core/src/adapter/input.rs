@@ -24,8 +24,8 @@ pub trait InputOps: Send + Sync {
     ///
     /// Callers must have re-verified `window` (pid, process instance, and
     /// exact window id) under `lease` and checked that the point lies inside
-    /// its bounds. Only `Move` and `Click` events are meaningful. The effect
-    /// itself is never verified here.
+    /// its bounds. `Move`, `Click`, and `Wheel` events are meaningful. The
+    /// effect itself is never verified here.
     fn background_mouse_event(
         &self,
         _window: &WindowInfo,

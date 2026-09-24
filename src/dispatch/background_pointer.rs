@@ -10,8 +10,9 @@ use agent_desktop_core::{
 };
 use serde_json::Value;
 
-use crate::cli_args::actions::{HoverArgs, MouseClickArgs, MouseMoveArgs};
-use crate::dispatch::parse::{parse_modifiers, parse_mouse_button, parse_xy};
+use crate::cli_args::actions::{HoverArgs, MouseClickArgs, MouseMoveArgs, ScrollArgs};
+use crate::cli_args::mouse_wheel::MouseWheelArgs;
+use crate::dispatch::parse::{parse_direction, parse_modifiers, parse_mouse_button, parse_xy};
 
 /// `--window-id` only names the target of a background `--xy` event; on the
 /// default path it would be silently ignored, so it is rejected instead. This
@@ -109,17 +110,66 @@ pub(super) fn mouse_click(
     )
 }
 
-/// Coordinates alone cannot name a process, so background `--xy` delivery
-/// always needs the exact window it is aimed at.
+pub(super) fn mouse_wheel(
+    args: MouseWheelArgs,
+    adapter: &dyn PlatformAdapter,
+    context: &CommandContext,
+) -> Result<Value, AppError> {
+    execute(
+        BackgroundPointerArgs {
+            action: BackgroundPointerAction::Wheel {
+                dx: args.dx,
+                dy: args.dy,
+                modifiers: parse_modifiers(&args.modifiers)?,
+            },
+            target: BackgroundPointerTarget::Point {
+                x: args.x,
+                y: args.y,
+                window_id: required_window_id(args.window_id)?,
+            },
+            timeout_ms: None,
+        },
+        adapter,
+        context,
+    )
+}
+
+/// `scroll <ref> --background` is a wheel at the ref's center, not the
+/// semantic AX scroll, so it does not require the ref to advertise `Scroll`.
+pub(super) fn scroll(
+    args: ScrollArgs,
+    adapter: &dyn PlatformAdapter,
+    context: &CommandContext,
+) -> Result<Value, AppError> {
+    execute(
+        BackgroundPointerArgs {
+            action: BackgroundPointerAction::scroll(parse_direction(&args.direction)?, args.amount),
+            target: BackgroundPointerTarget::Ref {
+                ref_id: args.ref_id,
+                snapshot_id: args.snapshot,
+            },
+            timeout_ms: helpers::normalize_action_timeout_ms(args.timeout_ms),
+        },
+        adapter,
+        context,
+    )
+}
+
 fn point_target(xy: &str, window_id: Option<String>) -> Result<BackgroundPointerTarget, AppError> {
-    let Some(window_id) = window_id.filter(|id| !id.is_empty()) else {
-        return Err(AppError::invalid_input_with_suggestion(
-            "--background with --xy requires --window-id",
-            "Run 'list-windows' to find the target window id, then pass --window-id w-<number>.",
-        ));
-    };
+    let window_id = required_window_id(window_id)?;
     let (x, y) = parse_xy(xy)?;
     Ok(BackgroundPointerTarget::Point { x, y, window_id })
+}
+
+/// Coordinates alone cannot name a process, so background coordinate
+/// delivery always needs the exact window it is aimed at.
+fn required_window_id(window_id: Option<String>) -> Result<String, AppError> {
+    window_id.filter(|id| !id.is_empty()).ok_or_else(|| {
+        AppError::invalid_input_with_suggestion(
+            "--background with coordinates requires --window-id",
+            "Run 'list-windows' to find the target window id, then pass --window-id w-<number>.",
+        )
+    })
 }
 
 #[cfg(test)]

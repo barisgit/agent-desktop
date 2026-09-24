@@ -188,6 +188,10 @@ pub(super) fn mouse_wheel(
     adapter: &dyn PlatformAdapter,
     context: &CommandContext,
 ) -> Result<Value, AppError> {
+    if args.background {
+        return background_pointer::mouse_wheel(args, adapter, context);
+    }
+    background_pointer::reject_window_id_without_background(args.window_id.as_deref())?;
     mouse_wheel_command::execute(
         mouse_wheel_command::MouseWheelArgs {
             x: args.x,

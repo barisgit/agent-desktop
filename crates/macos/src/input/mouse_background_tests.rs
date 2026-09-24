@@ -31,7 +31,7 @@ fn failures_before_posting_are_reported_as_not_delivered() {
             window("w-9555"),
             MouseEventKind::Wheel {
                 delta_x: 0.0,
-                delta_y: 1.0,
+                delta_y: 0.0,
             },
         ),
     ];
