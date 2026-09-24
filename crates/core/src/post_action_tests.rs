@@ -351,5 +351,6 @@ fn unobserved_text_insertion_names_value_and_keyboard_alternatives() {
     assert_eq!(error.disposition, DeliverySemantics::delivered_unverified());
     let suggestion = error.suggestion.unwrap();
     assert!(suggestion.contains("set-value"), "{suggestion}");
-    assert!(suggestion.contains("type --background"), "{suggestion}");
+    assert!(suggestion.contains("type --headed"), "{suggestion}");
+    assert!(!suggestion.contains("--background"), "{suggestion}");
 }

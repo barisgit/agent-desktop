@@ -123,7 +123,7 @@ fn mismatch_error(action: &Action) -> AdapterError {
     error
 }
 
-const TYPE_MISMATCH_SUGGESTION: &str = "The field did not show the typed text, but the write was accepted, so do not retry blindly: inspect post_state first. Then use 'set-value' with the complete intended value, or keyboard delivery with 'type --background' or 'type --headed' for editors such as Monaco that ignore accessibility text writes.";
+const TYPE_MISMATCH_SUGGESTION: &str = "The field did not show the typed text, but the write was accepted, so do not retry blindly: inspect post_state first. Then use 'set-value' with the complete intended value, or keyboard delivery with 'type --headed' for editors such as Monaco that ignore accessibility text writes.";
 
 fn secure_value_is_redacted(action: &Action, observed: &LiveElement) -> bool {
     action.writes_element_value()
