@@ -90,8 +90,8 @@ pub(super) fn instruction_to_render(
 ///
 /// Hide forgets the landing so a later travel never animates from a stale drag
 /// origin, but it leaves `pose_deadline` and the native retained pose intact: a
-/// Show before the deadline brings the same cue back, and after the deadline the
-/// cue stays gone. Show changes nothing here.
+/// Show before the fade ends brings the same cue back, at the opacity the fade
+/// has reached, and after the fade the cue stays gone. Show changes nothing here.
 pub(super) fn apply_landing_memory(
     control: &CursorOverlayControl,
     state: &mut OverlayState,
