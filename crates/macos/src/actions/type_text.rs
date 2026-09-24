@@ -28,26 +28,61 @@ pub(crate) fn execute_type(
                 .with_verified(false),
         ]);
     }
-    if role == "AXSecureTextField" {
-        insert_selected_text(element, text, deadline)?;
+    type_semantically(element, &role, text, deadline)
+}
+
+/// The accessibility reads and writes headless `type` performs, so the write
+/// sequence can be exercised without a live element.
+trait SemanticTextTarget {
+    fn read_subrole(&self, deadline: Deadline) -> Result<Option<String>, i32>;
+    fn read_value(&self, deadline: Deadline) -> Option<String>;
+    fn read_selection(&self, deadline: Deadline) -> Option<std::ops::Range<usize>>;
+    fn value_is_settable(&self, deadline: Deadline) -> bool;
+    fn write_selected_text(&self, text: &str, deadline: Deadline) -> Result<(), AdapterError>;
+    fn write_value(&self, value: &str, deadline: Deadline) -> Result<(), AdapterError>;
+}
+
+fn type_semantically(
+    target: &impl SemanticTextTarget,
+    role: &str,
+    text: &str,
+    deadline: Deadline,
+) -> Result<Vec<ActionStep>, AdapterError> {
+    if may_be_secure(role, target.read_subrole(deadline)) {
+        target.write_selected_text(text, deadline)?;
         return Ok(vec![semantic_step("AXSelectedText")]);
     }
 
-    let before = read_value(element, deadline);
-    let selection = crate::tree::attributes::selected_text_range(element, deadline);
-    insert_selected_text(element, text, deadline)?;
-    let after = read_value(element, deadline);
+    let before = target.read_value(deadline);
+    let selection = target.read_selection(deadline);
+    target.write_selected_text(text, deadline)?;
+    let after = target.read_value(deadline);
 
     let fallback = fallback_value(before.as_deref(), selection, after.as_deref(), text);
-    let Some(value) = fallback.filter(|_| value_is_settable(element, deadline)) else {
+    let Some(value) = fallback.filter(|_| target.value_is_settable(deadline)) else {
         return Ok(vec![semantic_step("AXSelectedText")]);
     };
-    write_value_after_insertion(element, &value, deadline)?;
+    target
+        .write_value(&value, deadline)
+        .map_err(insertion_was_accepted)?;
     Ok(vec![
         semantic_step("AXSelectedText"),
         semantic_step("AXValue"),
     ])
 }
+
+/// Password fields can be `AXTextField` with an `AXSecureTextField` subrole.
+/// Their value readback is masked, so composing from it would overwrite the
+/// secret. A subrole that cannot be read is treated as possibly secure.
+fn may_be_secure(role: &str, subrole: Result<Option<String>, i32>) -> bool {
+    role == SECURE_TEXT_FIELD
+        || match subrole {
+            Ok(subrole) => subrole.as_deref() == Some(SECURE_TEXT_FIELD),
+            Err(_) => true,
+        }
+}
+
+const SECURE_TEXT_FIELD: &str = "AXSecureTextField";
 
 /// Returns the value `AXValue` should receive when an accepted insertion left
 /// the field unchanged. Any change, unknown value, or unknown insertion point
@@ -67,34 +102,14 @@ fn fallback_value(
 }
 
 /// The preceding `AXSelectedText` write was accepted, so a failed fallback
-/// cannot report the action as never delivered.
-fn write_value_after_insertion(
-    element: &AXElement,
-    value: &str,
-    deadline: Deadline,
-) -> Result<(), AdapterError> {
-    crate::actions::ax_helpers::set_ax_string_or_err(element, "AXValue", value, deadline).map_err(
-        |error| {
-            if error.disposition == DeliverySemantics::not_delivered() {
-                error.with_disposition(DeliverySemantics::delivered_unverified())
-            } else {
-                error
-            }
-        },
-    )
-}
-
-fn value_is_settable(element: &AXElement, deadline: Deadline) -> bool {
-    matches!(
-        crate::actions::ax_helpers::is_attr_settable(element, "AXValue", deadline),
-        Ok(true)
-    )
-}
-
-fn read_value(element: &AXElement, deadline: Deadline) -> Option<String> {
-    crate::tree::attributes::copy_string_attr_result(element, "AXValue", deadline)
-        .ok()
-        .flatten()
+/// cannot report the action as never delivered or as safe to retry.
+fn insertion_was_accepted(error: AdapterError) -> AdapterError {
+    match error.disposition {
+        DeliverySemantics::NotDelivered | DeliverySemantics::Unknown => {
+            error.with_disposition(DeliverySemantics::delivered_unverified())
+        }
+        _ => error,
+    }
 }
 
 fn semantic_step(label: &'static str) -> ActionStep {
@@ -103,29 +118,43 @@ fn semantic_step(label: &'static str) -> ActionStep {
         .with_verified(false)
 }
 
-fn insert_selected_text(
-    element: &AXElement,
-    text: &str,
-    deadline: Deadline,
-) -> Result<(), AdapterError> {
-    prepare(element, deadline)?;
-    write_selected_text(text, |attribute, value| {
-        crate::actions::ax_helpers::set_ax_string_or_err(element, attribute, value, deadline)
-    })?;
-    if deadline.is_expired() {
-        return Err(deadline
-            .timeout_error()
-            .with_details(serde_json::json!({ "operation": "AXSelectedText" }))
-            .with_disposition(DeliverySemantics::delivered_unverified()));
+impl SemanticTextTarget for AXElement {
+    fn read_subrole(&self, deadline: Deadline) -> Result<Option<String>, i32> {
+        crate::tree::attributes::copy_string_attr_result(self, "AXSubrole", deadline)
     }
-    Ok(())
-}
 
-fn write_selected_text(
-    text: &str,
-    write: impl FnOnce(&str, &str) -> Result<(), AdapterError>,
-) -> Result<(), AdapterError> {
-    write("AXSelectedText", text)
+    fn read_value(&self, deadline: Deadline) -> Option<String> {
+        crate::tree::attributes::copy_string_attr_result(self, "AXValue", deadline)
+            .ok()
+            .flatten()
+    }
+
+    fn read_selection(&self, deadline: Deadline) -> Option<std::ops::Range<usize>> {
+        crate::tree::attributes::selected_text_range(self, deadline)
+    }
+
+    fn value_is_settable(&self, deadline: Deadline) -> bool {
+        matches!(
+            crate::actions::ax_helpers::is_attr_settable(self, "AXValue", deadline),
+            Ok(true)
+        )
+    }
+
+    fn write_selected_text(&self, text: &str, deadline: Deadline) -> Result<(), AdapterError> {
+        prepare(self, deadline)?;
+        crate::actions::ax_helpers::set_ax_string_or_err(self, "AXSelectedText", text, deadline)?;
+        if deadline.is_expired() {
+            return Err(deadline
+                .timeout_error()
+                .with_details(serde_json::json!({ "operation": "AXSelectedText" }))
+                .with_disposition(DeliverySemantics::delivered_unverified()));
+        }
+        Ok(())
+    }
+
+    fn write_value(&self, value: &str, deadline: Deadline) -> Result<(), AdapterError> {
+        crate::actions::ax_helpers::set_ax_string_or_err(self, "AXValue", value, deadline)
+    }
 }
 
 fn text_target_role(element: &AXElement, deadline: Deadline) -> Result<String, AdapterError> {
@@ -172,59 +201,5 @@ pub(crate) fn execute_type(
 }
 
 #[cfg(test)]
-mod tests {
-    use std::cell::RefCell;
-
-    #[test]
-    fn type_writes_the_current_selection_instead_of_the_whole_value() {
-        let observed = RefCell::new(None);
-        super::write_selected_text("inserted", |attribute, value| {
-            observed.replace(Some((attribute.to_owned(), value.to_owned())));
-            Ok(())
-        })
-        .unwrap();
-
-        assert_eq!(
-            observed.into_inner(),
-            Some(("AXSelectedText".into(), "inserted".into()))
-        );
-    }
-
-    #[test]
-    fn unchanged_value_falls_back_to_the_composed_value_at_the_selection() {
-        assert_eq!(
-            super::fallback_value(Some("ab"), Some(1..1), Some("ab"), "X"),
-            Some("aXb".into())
-        );
-        assert_eq!(
-            super::fallback_value(Some("a😀b"), Some(1..3), Some("a😀b"), "X"),
-            Some("aXb".into())
-        );
-        assert_eq!(
-            super::fallback_value(Some(""), None, Some(""), "new"),
-            Some("new".into())
-        );
-    }
-
-    #[test]
-    fn fallback_never_runs_when_the_insertion_may_have_landed_or_evidence_is_missing() {
-        let cases = [
-            (Some("ab"), Some(1..1), Some("aXb"), "X"),
-            (Some("ab"), Some(1..1), Some("something else"), "X"),
-            (None, Some(0..0), Some(""), "X"),
-            (Some(""), Some(0..0), None, "X"),
-            (Some("ab"), None, Some("ab"), "X"),
-            (Some("ab"), Some(0..5), Some("ab"), "X"),
-            (Some("😀"), Some(1..1), Some("😀"), "X"),
-            (Some("ab"), Some(0..2), Some("ab"), "ab"),
-            (Some("ab"), Some(1..1), Some("ab"), ""),
-        ];
-        for (before, range, after, text) in cases {
-            assert_eq!(
-                super::fallback_value(before, range.clone(), after, text),
-                None,
-                "{before:?} {range:?} {after:?} {text:?}"
-            );
-        }
-    }
-}
+#[path = "type_text_tests.rs"]
+mod tests;
