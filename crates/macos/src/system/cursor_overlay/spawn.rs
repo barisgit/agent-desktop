@@ -33,12 +33,17 @@ pub(crate) fn update(control: &CursorOverlayControl) -> Result<(), AdapterError>
     if send_until(&socket, control, deadline)? {
         return Ok(());
     }
-    retire_older_generations(control, deadline);
     if control.is_transient() {
+        retire(older_generations(control), control.session_id(), deadline);
         return Ok(());
     }
     let lock_path = super::endpoint::lock_path()?;
-    let _lock = startup_lock(&lock_path, deadline)?;
+    let _lock = lock_and_retire(
+        &lock_path,
+        older_generations(control),
+        control.session_id(),
+        deadline,
+    )?;
     if send_until(&socket, control, deadline)? {
         return Ok(());
     }
@@ -162,10 +167,28 @@ fn terminate_child(child: &mut std::process::Child) -> bool {
     super::super::process::poll_reap(child, deadline)
 }
 
-/// Stops renderers of older protocol generations on this route before a
-/// current-generation renderer takes over, so an upgraded CLI never leaves a
-/// stale cursor beside the new one or talks to a decoder that rejects it.
-fn retire_older_generations(control: &CursorOverlayControl, deadline: Instant) {
+/// Acquires the startup lock and only then retires older-generation renderers.
+///
+/// Every generation starts its renderer while holding this same lock and
+/// releases it once the renderer's socket is bound. Retiring after acquisition
+/// therefore also reaches a previous-generation renderer that was still
+/// starting while this caller waited; retiring before it would miss that
+/// renderer and leave it running beside the new one.
+fn lock_and_retire(
+    lock_path: &Path,
+    older: impl IntoIterator<Item = PathBuf>,
+    session_id: &str,
+    deadline: Instant,
+) -> Result<agent_desktop_core::FileLock, AdapterError> {
+    let lock = startup_lock(lock_path, deadline)?;
+    retire(older, session_id, deadline);
+    Ok(lock)
+}
+
+/// Sockets of older protocol generations on this route, so an upgraded CLI
+/// never leaves a stale cursor beside the new one or talks to a decoder that
+/// rejects it.
+fn older_generations(control: &CursorOverlayControl) -> impl Iterator<Item = PathBuf> {
     let mut sockets = vec![super::endpoint::previous_generation_path(
         control.session_id(),
         control.agent_id(),
@@ -173,11 +196,7 @@ fn retire_older_generations(control: &CursorOverlayControl, deadline: Instant) {
     if control.agent_id().is_none() {
         sockets.push(super::endpoint::legacy_path(control.session_id()));
     }
-    retire(
-        sockets.into_iter().flatten(),
-        control.session_id(),
-        deadline,
-    );
+    sockets.into_iter().flatten()
 }
 
 /// Sends Disable, the one control every generation decodes, to each socket.

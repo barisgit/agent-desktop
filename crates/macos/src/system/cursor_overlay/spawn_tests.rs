@@ -62,7 +62,10 @@ fn check_acknowledgement(phase: agent_desktop_core::CursorPhase, accepted: bool)
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_nanos();
-    let path = std::path::PathBuf::from(format!("/tmp/ca-{}-{unique:x}.sock", std::process::id()));
+    let path = std::path::PathBuf::from(format!(
+        "/tmp/ca-{}-{unique:x}.sock",
+        std::process::id()
+    ));
     let result = std::panic::catch_unwind(|| {
         let listener = UnixListener::bind(&path).unwrap();
         let receiver = thread::spawn(move || {
@@ -117,5 +120,66 @@ fn previous_generation_renderer_is_retired_with_a_disable_it_can_decode() {
     assert_eq!(
         serde_json::from_slice::<serde_json::Value>(&payload).unwrap(),
         serde_json::json!({ "action": "disable", "session_id": "run-upgrade" })
+    );
+}
+
+/// A previous-generation CLI binds its renderer socket while holding the
+/// shared startup lock. The retirement must still reach that renderer even
+/// though its socket did not exist when this caller began waiting.
+#[test]
+fn previous_generation_that_binds_while_the_startup_lock_is_held_is_retired() {
+    let unique = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let directory =
+        std::path::PathBuf::from(format!("/private/tmp/cs-{}-{unique:x}", std::process::id()));
+    std::os::unix::fs::DirBuilderExt::mode(&mut std::fs::DirBuilder::new(), 0o700)
+        .create(&directory)
+        .unwrap();
+    let lock_path = directory.join("start.lock");
+    let socket = directory.join("v2.sock");
+    let held = startup_lock(&lock_path, Instant::now() + Duration::from_secs(1)).unwrap();
+    let waiter = {
+        let lock_path = lock_path.clone();
+        let socket = socket.clone();
+        thread::spawn(move || {
+            lock_and_retire(
+                &lock_path,
+                [socket],
+                "run-race",
+                Instant::now() + Duration::from_secs(5),
+            )
+            .map(drop)
+        })
+    };
+    thread::sleep(Duration::from_millis(100));
+
+    let listener = UnixListener::bind(&socket).unwrap();
+    listener.set_nonblocking(true).unwrap();
+    let receiver = thread::spawn(move || {
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while Instant::now() < deadline {
+            if let Ok((mut stream, _)) = listener.accept() {
+                stream.set_nonblocking(false).unwrap();
+                let mut payload = Vec::new();
+                stream.read_to_end(&mut payload).unwrap();
+                stream.write_all(&[1]).unwrap();
+                return Some(payload);
+            }
+            thread::sleep(Duration::from_millis(5));
+        }
+        None
+    });
+    drop(held);
+
+    let locked = waiter.join().unwrap();
+    let payload = receiver.join().unwrap();
+    let _ = std::fs::remove_dir_all(&directory);
+    assert!(locked.is_ok(), "{locked:?}");
+    let payload = payload.expect("the renderer that bound under the lock was never retired");
+    assert_eq!(
+        serde_json::from_slice::<serde_json::Value>(&payload).unwrap(),
+        serde_json::json!({ "action": "disable", "session_id": "run-race" })
     );
 }
