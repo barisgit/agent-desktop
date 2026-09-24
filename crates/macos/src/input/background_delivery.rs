@@ -49,13 +49,14 @@ pub(crate) trait DeliveryIo: GuardIo {
 /// path each, then let the focus guard watch for a steal.
 ///
 /// The deadline is checked before every event that starts something new (a
-/// move, a button or key down, a wheel chunk). An event that completes a
-/// press already posted is always sent, so nothing is left held down. When
-/// the budget runs out the delivery stops there with `TIMEOUT`: not
-/// delivered (safe to retry) if no input event was posted yet, otherwise
-/// delivered-unverified (unsafe to retry) with the posted and planned event
-/// counts in the details. The focus record alone does not count as delivery:
-/// it changes no content and resending it is idempotent.
+/// move, a button or key down, a wheel chunk) and once more after the last
+/// event. An event that completes a press already posted is always sent, so
+/// nothing is left held down, but a delivery that finishes past the budget
+/// still fails. When the budget runs out the delivery stops there with
+/// `TIMEOUT`: not delivered (safe to retry) if no input event was posted yet,
+/// otherwise delivered-unverified (unsafe to retry) with the posted and
+/// planned event counts in the details. The focus record alone does not count
+/// as delivery: it changes no content and resending it is idempotent.
 pub(crate) fn run(
     prepared: Prepared,
     deadline: Deadline,
@@ -100,6 +101,10 @@ pub(crate) fn run(
         delivery.mark_delivered();
         sample(&mut guard, io);
         pause(io, budget_end, prepared_event.pause_after);
+    }
+
+    if expired(io, budget_end) {
+        return Err(timeout(deadline, delivery, planned));
     }
 
     match guard.as_mut() {

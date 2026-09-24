@@ -16,13 +16,16 @@ pub trait InputOps: Send + Sync {
     }
 
     /// Posts `event` straight to the process that owns `window` without moving
-    /// the system cursor, activating the app, or changing keyboard focus.
+    /// the system cursor. Leaving the app inactive and keyboard focus where it
+    /// was is best effort, not a guarantee: the returned report carries the
+    /// frontmost application sampled before and after delivery plus the focus
+    /// guard outcome (summarized by `focus_change`) as evidence of whether
+    /// focus moved.
     ///
     /// Callers must have re-verified `window` (pid, process instance, and
     /// exact window id) under `lease` and checked that the point lies inside
-    /// its bounds. Only `Move` and `Click` events are meaningful. The returned
-    /// report carries the frontmost application sampled before and after
-    /// delivery; the effect itself is never verified here.
+    /// its bounds. Only `Move` and `Click` events are meaningful. The effect
+    /// itself is never verified here.
     fn background_mouse_event(
         &self,
         _window: &WindowInfo,

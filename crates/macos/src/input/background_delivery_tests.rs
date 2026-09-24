@@ -277,6 +277,49 @@ fn a_press_already_posted_is_released_even_after_the_deadline() {
     assert_eq!(error.disposition, DeliverySemantics::delivered_unverified());
 }
 
+/// The final button-down can itself overrun the budget. Its release still
+/// goes out so nothing stays held, but the delivery ran past its deadline
+/// and must not report success.
+#[test]
+fn a_deadline_that_expires_after_the_final_press_still_releases_and_times_out() {
+    let mut io = FakeIo::new();
+    io.jump_after_post = Some((3, Duration::from_secs(10)));
+
+    let error = run(
+        prepared(skylight_only(), double_click()),
+        deadline(1_000),
+        &mut io,
+    )
+    .unwrap_err();
+
+    assert_eq!(io.sent, (1..=5).map(Sent::SkyLight).collect::<Vec<_>>());
+    assert_eq!(error.code, ErrorCode::Timeout);
+    assert_eq!(error.disposition, DeliverySemantics::delivered_unverified());
+    let details = error.details.expect("timeout details");
+    assert_eq!(details["delivered_events"], 5);
+    assert_eq!(details["planned_events"], 5);
+}
+
+#[test]
+fn a_move_that_overruns_the_deadline_times_out_as_delivered() {
+    let mut io = FakeIo::new();
+    io.jump_after_post = Some((0, Duration::from_secs(10)));
+
+    let error = run(
+        prepared(skylight_only(), vec![event(1, false, 0)]),
+        deadline(1_000),
+        &mut io,
+    )
+    .unwrap_err();
+
+    assert_eq!(io.sent, [Sent::SkyLight(1)]);
+    assert_eq!(error.code, ErrorCode::Timeout);
+    assert_eq!(error.disposition, DeliverySemantics::delivered_unverified());
+    let details = error.details.expect("timeout details");
+    assert_eq!(details["delivered_events"], 1);
+    assert_eq!(details["planned_events"], 1);
+}
+
 #[test]
 fn repeated_degradations_are_reported_once() {
     let mut degradations = Vec::new();
