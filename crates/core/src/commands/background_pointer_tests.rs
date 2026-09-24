@@ -191,6 +191,38 @@ fn frontmost_change_is_reported_with_a_warning() {
 }
 
 #[test]
+fn guarded_steal_reports_layers_degradations_and_guard_evidence() {
+    let mut adapter = BackgroundCaptureAdapter::new();
+    adapter.report.layers = vec!["route".into(), "guard".into()];
+    adapter.report.degradations = vec!["skylight: SLEventPostToPid unavailable".into()];
+    adapter.report.focus_guard = Some(crate::BackgroundFocusGuard {
+        interventions: 1,
+        restored: true,
+        max_steal_ms: 42,
+    });
+
+    let value = execute(
+        point_args(left_click(1), -2500.0, 300.0),
+        &adapter,
+        &CommandContext::default(),
+    )
+    .unwrap();
+
+    let background = &value["background"];
+    assert_eq!(background["focus_change"], "restored");
+    assert_eq!(background["layers"], serde_json::json!(["route", "guard"]));
+    assert_eq!(
+        background["degraded"][0],
+        "skylight: SLEventPostToPid unavailable"
+    );
+    assert_eq!(background["focus_guard"]["interventions"], 1);
+    assert_eq!(background["focus_guard"]["restored"], true);
+    assert_eq!(background["focus_guard"]["max_steal_ms"], 42);
+    assert!(value["warning"].as_str().unwrap().contains("42 ms"));
+    assert_eq!(value["disposition"]["delivery"], "delivered_unverified");
+}
+
+#[test]
 fn unreadable_frontmost_is_reported_as_unknown() {
     let mut adapter = BackgroundCaptureAdapter::new();
     adapter.report.frontmost_pid_after = None;

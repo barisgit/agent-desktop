@@ -193,3 +193,39 @@ fn mouse_point_args_batch_json_without_modifiers_key_still_deserializes() {
         serde_json::from_value(serde_json::json!({ "xy": "10,20" })).unwrap();
     assert!(args.modifiers.is_empty());
 }
+
+/// Displays left of or above the primary display have negative global
+/// coordinates, so every coordinate flag must accept a value starting with `-`.
+#[test]
+fn coordinate_flags_accept_negative_coordinates() {
+    let click = MouseClickArgs::try_parse_from([
+        "mouse-click",
+        "--background",
+        "--window-id",
+        "w-6015",
+        "--xy",
+        "-1580.5,966.5",
+    ])
+    .unwrap();
+    assert_eq!(click.xy, "-1580.5,966.5");
+
+    let moved = MouseMoveArgs::try_parse_from(["mouse-move", "--xy", "-10,-20"]).unwrap();
+    assert_eq!(moved.xy, "-10,-20");
+
+    let hover = HoverArgs::try_parse_from(["hover", "--xy", "-3762.5,1940"]).unwrap();
+    assert_eq!(hover.xy.as_deref(), Some("-3762.5,1940"));
+
+    let down = MousePointArgs::try_parse_from(["mouse-down", "--xy", "-1,2"]).unwrap();
+    assert_eq!(down.xy, "-1,2");
+
+    let drag = crate::cli_args::drag::DragCliArgs::try_parse_from([
+        "drag",
+        "--from-xy",
+        "-5,6",
+        "--to-xy",
+        "-7,-8",
+    ])
+    .unwrap();
+    assert_eq!(drag.target.from_xy.as_deref(), Some("-5,6"));
+    assert_eq!(drag.target.to_xy.as_deref(), Some("-7,-8"));
+}

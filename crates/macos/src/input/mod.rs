@@ -1,4 +1,14 @@
 mod adapter;
+#[cfg(target_os = "macos")]
+mod background_activation;
+#[cfg(target_os = "macos")]
+mod background_events;
+#[cfg(target_os = "macos")]
+mod background_focus_guard;
+#[cfg(target_os = "macos")]
+mod background_frontmost;
+#[cfg(target_os = "macos")]
+mod background_layers;
 pub(crate) mod blocked_combo;
 pub(crate) mod clipboard;
 #[cfg(all(test, target_os = "macos", feature = "interactive-tests"))]
@@ -17,3 +27,5 @@ mod mouse_drag_state;
 pub(crate) mod mouse_move;
 pub(crate) mod mouse_scroll;
 mod owned_object;
+#[cfg(target_os = "macos")]
+mod skylight;

@@ -183,6 +183,7 @@ pub(crate) struct HoverArgs {
     pub snapshot: Option<String>,
     #[arg(
         long,
+        allow_hyphen_values = true,
         help = "Absolute coordinates as x,y; requires --headed, or --background with --window-id"
     )]
     pub xy: Option<String>,
@@ -218,6 +219,7 @@ pub(crate) struct HoverArgs {
 pub(crate) struct MouseMoveArgs {
     #[arg(
         long,
+        allow_hyphen_values = true,
         help = "Absolute coordinates as x,y; requires --headed, or --background with --window-id"
     )]
     pub xy: String,
@@ -241,6 +243,7 @@ pub(crate) struct MouseMoveArgs {
 pub(crate) struct MouseClickArgs {
     #[arg(
         long,
+        allow_hyphen_values = true,
         help = "Absolute coordinates as x,y; requires --headed, or --background with --window-id"
     )]
     pub xy: String,
@@ -279,7 +282,11 @@ pub(crate) struct MouseClickArgs {
 #[derive(Parser, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct MousePointArgs {
-    #[arg(long, help = "Absolute coordinates as x,y; requires --headed")]
+    #[arg(
+        long,
+        allow_hyphen_values = true,
+        help = "Absolute coordinates as x,y; requires --headed"
+    )]
     pub xy: String,
     #[arg(
         long,

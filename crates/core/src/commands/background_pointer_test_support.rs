@@ -53,6 +53,7 @@ impl BackgroundCaptureAdapter {
             report: BackgroundPointerReport {
                 frontmost_pid_before: Some(ProcessId::new(7)),
                 frontmost_pid_after: Some(ProcessId::new(7)),
+                ..BackgroundPointerReport::default()
             },
             expected_windows: Mutex::new(Vec::new()),
             delivered: Mutex::new(Vec::new()),
@@ -110,7 +111,7 @@ impl InputOps for BackgroundCaptureAdapter {
         _lease: &crate::InteractionLease,
     ) -> Result<BackgroundPointerReport, AdapterError> {
         self.delivered.lock().unwrap().push((window.clone(), event));
-        Ok(self.report)
+        Ok(self.report.clone())
     }
 }
 

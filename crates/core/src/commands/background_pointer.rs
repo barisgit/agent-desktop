@@ -234,10 +234,12 @@ fn response(
     response["x"] = json!(point.x);
     response["y"] = json!(point.y);
 
+    let focus_change = report.focus_change();
     let mut background = json!({
         "pid": window.pid,
         "window_id": window.id,
-        "focus_change": report.focus_change(),
+        "focus_change": focus_change,
+        "layers": report.layers,
     });
     if let Some(pid) = report.frontmost_pid_before {
         background["frontmost_pid_before"] = json!(pid);
@@ -245,15 +247,33 @@ fn response(
     if let Some(pid) = report.frontmost_pid_after {
         background["frontmost_pid_after"] = json!(pid);
     }
+    if !report.degradations.is_empty() {
+        background["degraded"] = json!(report.degradations);
+    }
+    if let Some(guard) = report.focus_guard {
+        background["focus_guard"] = json!(guard);
+    }
     response["background"] = background;
     response["disposition"] = json!(DeliverySemantics::delivered_unverified());
 
-    if report.focus_change() == "changed" {
-        response["warning"] = json!(
-            "The frontmost application changed during background delivery; the target may have activated itself"
-        );
+    if let Some(warning) = focus_warning(focus_change, report.focus_guard) {
+        response["warning"] = json!(warning);
     }
     response
+}
+
+fn focus_warning(focus_change: &str, guard: Option<crate::BackgroundFocusGuard>) -> Option<String> {
+    let steal_ms = guard.map_or(0, |guard| guard.max_steal_ms);
+    match focus_change {
+        "changed" => Some(
+            "The frontmost application changed during background delivery and was not restored; the target may have activated itself"
+                .to_string(),
+        ),
+        "restored" => Some(format!(
+            "The target briefly became frontmost (up to {steal_ms} ms) during background delivery before the previous application was frontmost again"
+        )),
+        _ => None,
+    }
 }
 
 fn not_delivered(code: ErrorCode, message: impl Into<String>) -> AdapterError {
