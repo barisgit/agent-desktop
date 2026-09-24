@@ -65,9 +65,11 @@ static bool ADGlowCanOrderAbove(uint32_t window) {
     return [numbers containsObject:@(window)];
 }
 
-/// The outline becomes visible only after a fresh window list confirms its
+/// The outline becomes visible only after a window list confirms its
 /// placement; until then it is ordered at zero opacity, so a relative ordering
-/// the window server ignored or applied elsewhere is never seen.
+/// the window server ignored or applied elsewhere is never seen. The window
+/// server applies an ordering asynchronously, so a list read straight after
+/// ordering never contains it: the confirmation happens on the next refresh.
 void ADGlowRefresh(void) {
     if (ADGlowWindow == nil) {
         ADGlowWindow = ADGlowMakeWindow();
@@ -81,7 +83,7 @@ void ADGlowRefresh(void) {
         ADGlowWindow.alphaValue = 0.0;
         ADGlowLayout(frame, target.level);
         [ADGlowWindow orderWindow:NSWindowAbove relativeTo:(NSInteger)target.window];
-        placement = ADTargetGlowPlacement(glow, &target, &frame);
+        return;
     }
     if (placement != ADGlowPlacementPlaced) {
         ADGlowHide();
