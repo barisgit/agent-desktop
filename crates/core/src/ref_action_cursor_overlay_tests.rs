@@ -106,7 +106,7 @@ impl SystemOps for CursorAdapter {
     }
 }
 
-fn entry() -> RefEntry {
+pub(super) fn entry() -> RefEntry {
     let bounds = crate::Rect {
         x: 1.0,
         y: 1.0,

@@ -10,7 +10,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use super::bridge;
-use super::pose::{OverlayState, apply_landing_memory, fade_pose, target_instruction};
+use super::pose::{OverlayState, apply_landing_memory, fade_pose, instruction_to_render};
 
 pub(super) const MARKER: &str = "AGENT_DESKTOP_CURSOR_OVERLAY_CHILD";
 pub(super) const SOCKET_ENV: &str = "AGENT_DESKTOP_CURSOR_OVERLAY_SOCKET";
@@ -162,7 +162,7 @@ fn handle(control: &CursorOverlayControl, state: &mut OverlayState) -> Result<bo
         apply_landing_memory(control, state, None);
         return Ok(true);
     }
-    let Some(instruction) = target_instruction(control) else {
+    let Some(instruction) = instruction_to_render(control) else {
         return Ok(true);
     };
     bridge::prepare(instruction);

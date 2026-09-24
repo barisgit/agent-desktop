@@ -1,5 +1,6 @@
 mod config;
 mod control;
+mod cue;
 mod hand_path;
 mod instruction;
 mod layout;
@@ -12,6 +13,7 @@ mod timing;
 
 pub use config::{CursorOverlayConfig, MAX_CURSOR_LABEL_WORDS};
 pub use control::{CURSOR_OVERLAY_GREETING, CursorOverlayControl};
+pub(crate) use cue::{PointerCue, presentation_window};
 pub use instruction::CursorOverlayInstruction;
 pub use layout::place_label;
 pub use motion::CursorMotion;

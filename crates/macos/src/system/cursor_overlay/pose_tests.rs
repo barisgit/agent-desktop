@@ -26,18 +26,63 @@ fn expiries_at(state: &mut OverlayState, at: Instant) -> usize {
 }
 
 #[test]
-fn enable_and_non_target_controls_do_not_select_an_instruction_to_render() {
+fn only_present_controls_select_an_instruction_and_unbound_cues_still_render() {
     let enable = CursorOverlayControl::enable("run-enable".into(), CursorOverlayStyle::default());
-    let non_target = CursorOverlayControl::present("run-enable".into(), {
+    let show = CursorOverlayControl::show("run-enable".into());
+    let unbound = CursorOverlayControl::present("run-enable".into(), {
         let config = CursorOverlayConfig::enabled(None, 6).expect("valid config");
         CursorOverlayInstruction::new(Point { x: 400.0, y: 300.0 }, &config, false)
             .expect("valid instruction")
+            .with_phase(agent_desktop_core::CursorPhase::Drag)
     });
     let target = CursorOverlayControl::present("run-enable".into(), target(400.0));
 
-    assert!(target_instruction(&enable).is_none());
-    assert!(target_instruction(&non_target).is_none());
-    assert!(target_instruction(&target).is_some());
+    assert!(instruction_to_render(&enable).is_none());
+    assert!(instruction_to_render(&show).is_none());
+    assert!(instruction_to_render(&unbound).is_some());
+    assert!(instruction_to_render(&target).is_some());
+}
+
+#[test]
+fn hide_then_show_before_expiry_restores_the_pose_on_its_original_deadline() {
+    let now = Instant::now();
+    let mut state = OverlayState::default();
+    let shown = target(400.0);
+    state.record_target_pose(now);
+    apply_landing_memory(
+        &CursorOverlayControl::present("run-bracket".into(), shown.clone()),
+        &mut state,
+        Some(&shown),
+    );
+
+    assert_eq!(tick(&mut state, now + ms(1_000)), (None, false));
+    apply_landing_memory(
+        &CursorOverlayControl::hide("run-bracket".into()),
+        &mut state,
+        None,
+    );
+    assert_eq!(tick(&mut state, now + ms(2_000)), (None, false));
+    apply_landing_memory(
+        &CursorOverlayControl::show("run-bracket".into()),
+        &mut state,
+        None,
+    );
+
+    assert_eq!(state.pose_deadline, Some(now + ms(TARGET_POSE_IDLE_MS)));
+    assert_eq!(
+        tick(&mut state, now + ms(TARGET_POSE_IDLE_MS - 1)),
+        (None, false)
+    );
+    let (opacity, expired) = tick(&mut state, now + ms(TARGET_POSE_IDLE_MS + 500));
+    assert!(!expired);
+    assert!((opacity.expect("fades on the original schedule") - 0.5).abs() < 1e-9);
+    assert_eq!(
+        expiries_at(
+            &mut state,
+            now + ms(TARGET_POSE_IDLE_MS + TARGET_POSE_FADE_MS)
+        ),
+        1
+    );
 }
 
 #[test]

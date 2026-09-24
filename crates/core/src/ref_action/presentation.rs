@@ -57,15 +57,13 @@ pub(super) fn after_dispatch(
 }
 
 pub(super) fn window(target: &ResolvedRefAction<'_>) -> Option<(crate::ProcessId, String)> {
-    if !target.context.cursor_overlay().is_enabled() {
-        return None;
-    }
-    target
-        .adapter
-        .get_presentation_window_id(target.handle, target.deadline)
-        .ok()
-        .flatten()
-        .map(|window| (target.entry.process.pid, window))
+    crate::cursor_overlay::presentation_window(
+        target.adapter,
+        target.context,
+        target.handle,
+        target.entry.process.pid,
+        target.deadline,
+    )
 }
 
 fn destination(preflight: &ActionabilityPreflight) -> Option<crate::Point> {
@@ -81,3 +79,7 @@ fn is_click(action: &Action) -> bool {
         Action::Click | Action::DoubleClick | Action::RightClick | Action::TripleClick
     )
 }
+
+#[cfg(test)]
+#[path = "presentation_tests.rs"]
+mod tests;

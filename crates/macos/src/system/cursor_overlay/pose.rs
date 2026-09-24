@@ -3,7 +3,7 @@ use agent_desktop_core::{
 };
 use std::time::{Duration, Instant};
 
-/// Time the latest targeted action's cue stays fully visible.
+/// Time the latest presented cue stays fully visible.
 pub(super) const TARGET_POSE_IDLE_MS: u64 = 5_000;
 
 /// Time the cue then takes to fade linearly to nothing before it is cleared.
@@ -12,8 +12,8 @@ pub(super) const TARGET_POSE_FADE_MS: u64 = 1_000;
 /// Renderer-side memory for one agent cursor.
 ///
 /// `at` is where the next travel animation starts. `pose_deadline` marks when
-/// the latest targeted pose starts fading; it is cleared once the fade ends.
-/// Only a new targeted instruction moves the deadline; target visibility
+/// the latest presented pose starts fading; it is cleared once the fade ends.
+/// Only a new presented instruction moves the deadline; target visibility
 /// changes and Hide/Show lifecycle controls never extend, reset, or replay it.
 #[derive(Default)]
 pub(super) struct OverlayState {
@@ -73,14 +73,17 @@ pub(super) fn fade_pose(
     }
 }
 
-/// Only instructions bound to an exact target window are presented, so enabling
-/// the overlay or an untargeted control never shows a free-floating cursor.
-pub(super) fn target_instruction(
+/// Selects the instruction a control asks the renderer to draw.
+///
+/// Only Present controls carry one, so enabling the overlay or a Show never
+/// conjures a cursor on its own. A window-bound instruction follows its exact
+/// target window's visibility. An unbound one (coordinate-only pointer input,
+/// or a drag across windows) has no window to follow and is drawn as is. Both
+/// get the same idle fade, so neither lingers.
+pub(super) fn instruction_to_render(
     control: &CursorOverlayControl,
 ) -> Option<&CursorOverlayInstruction> {
-    control
-        .instruction()
-        .filter(|instruction| instruction.window().is_some())
+    control.instruction()
 }
 
 /// Updates where the next travel animation starts.
