@@ -1,4 +1,6 @@
 #import "cursor_overlay_chrome.h"
+#import "cursor_overlay_display.h"
+#import "cursor_overlay_glow.h"
 #import "cursor_overlay_lifecycle.h"
 #import <CoreGraphics/CoreGraphics.h>
 #import <stdbool.h>
@@ -41,12 +43,9 @@ static CFTimeInterval ADDragArmDeadline = 0.0;
 static CFTimeInterval ADDragDeadline = 0.0;
 static ADPersistentCursorPose ADPersistentPose = {0};
 
-extern bool agent_desktop_cursor_overlay_target_visible(void);
-extern bool agent_desktop_cursor_overlay_target_point(double *output);
-extern bool agent_desktop_cursor_overlay_label_position(double x, double y, double width,
-                                                        double height, double *output);
-
-static void ADMoveCursor(const AgentDesktopCursorFrame *frame, double mainHeight);
+static void ADMoveCursor(const AgentDesktopCursorFrame *frame, double mainHeight) {
+    [ADCursorWindow setFrameOrigin:NSMakePoint(frame->x - ADTipX, mainHeight - frame->y - ADTipY)];
+}
 
 static void ADDragCancel(void) {
     ADDragArmed = false;
@@ -59,6 +58,7 @@ static void ADSuppress(void) {
     [ADCursorWindow orderOut:nil];
     [ADBubbleWindow orderOut:nil];
     [ADRipple orderOut:nil];
+    ADGlowHide();
     ADHighlightStop();
 }
 
@@ -127,10 +127,6 @@ static void ADDragPoll(void) {
     ADDragLast = point;
 }
 
-static void ADMoveCursor(const AgentDesktopCursorFrame *frame, double mainHeight) {
-    [ADCursorWindow setFrameOrigin:NSMakePoint(frame->x - ADTipX, mainHeight - frame->y - ADTipY)];
-}
-
 static NSWindow *ADBubble(void) {
     NSWindow *window = ADWindow(NSMakeRect(0.0, 0.0, ADBubbleWidth, ADBubbleHeight));
     CALayer *surface = window.contentView.layer;
@@ -182,6 +178,7 @@ static void ADRefreshPersistent(void) {
     if ((presentation & ADPersistentCursorPresentationLabel) != 0) {
         [ADBubbleWindow orderFrontRegardless];
     }
+    ADGlowRefresh();
 }
 
 void agent_desktop_cursor_overlay_idle(void) {
@@ -197,6 +194,8 @@ void agent_desktop_cursor_overlay_idle(void) {
             if (now - checked >= 0.1) {
                 if (!agent_desktop_cursor_overlay_target_visible()) {
                     ADSuppress();
+                } else if (ADPersistentCursorPoseShows(&ADPersistentPose, true)) {
+                    ADGlowRefresh();
                 }
                 checked = now;
             }
@@ -344,6 +343,7 @@ bool agent_desktop_cursor_overlay_run(const AgentDesktopCursorFrame *frames,
             }
             bool followsBubble = showsBubble && !changedLabel && ADBubbleWindow.isVisible;
             [ADCursorWindow orderFrontRegardless];
+            ADGlowRefresh();
             [ADRipple setFrameOrigin:NSMakePoint(last->x - ADRippleSize * 0.5,
                                                  mainHeight - last->y - ADRippleSize * 0.5)];
             size_t movementFrameCount = frameCount;

@@ -474,7 +474,7 @@ Style is stored in the session manifest and inherited by every eligible headless
 | `--max-words N` | Label word limit, 1 to 12 | 6 |
 | `--fill HEX` | Cursor body colour | `#FFFFFF` |
 | `--rim HEX` | Cursor outline colour | `#111318` |
-| `--accent HEX` | Ripple and element outline colour | `#4299FF` |
+| `--accent HEX` | Ripple, element outline, and target window outline colour | `#4299FF` |
 | `--size N` | Cursor size multiplier, 0.5 to 4.0 | 1.0 |
 | `--no-ripple` | No ripple on click | ripple on |
 | `--no-highlight` | No element outline on click | outline on |
@@ -487,6 +487,7 @@ Behaviour:
 - The card shows the label. With no label there is no card.
 - Drags show a live accent-colored path while held and fade after release, controlled by the ripple setting and suppressed under Reduce Motion.
 - It stays fully visible for 5 s after the last targeted action, then fades out over about 1 s. The next targeted action shows it again.
+- While it is shown, a thin accent outline traces the inside edge of the target window and fades with it. The outline is omitted whenever another window overlaps the target or it cannot be ordered directly above the target.
 - `disable` removes it and stops the renderer. Ending the session is not needed.
 - Headed actions retain it while the real pointer is in use.
 - macOS renders it natively; other platforms use the adapter's presentation no-op.

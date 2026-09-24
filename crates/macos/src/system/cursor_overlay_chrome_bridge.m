@@ -1,4 +1,5 @@
 #import "cursor_overlay_chrome.h"
+#import "cursor_overlay_glow.h"
 
 const CGFloat ADRippleSize = 108.0;
 static const NSWindowLevel ADEffectLevel = 24;
@@ -148,13 +149,15 @@ NSWindow *ADWindow(NSRect frame) {
     return window;
 }
 
-/// Sets the pointer and label opacity without ordering either window, so a
-/// cue that target-visibility gating has hidden stays hidden. The renderer
-/// resets both to 1.0 before every presentation and after clearing a pose.
+/// Sets the pointer, label, and target outline opacity without ordering any
+/// of them, so a cue that target-visibility gating has hidden stays hidden. The
+/// renderer resets them to 1.0 before every presentation and after clearing a
+/// pose.
 void ADSetOpacity(NSWindow *pointer, NSWindow *bubble, double alpha) {
     CGFloat clamped = (CGFloat)fmin(fmax(alpha, 0.0), 1.0);
     pointer.alphaValue = clamped;
     bubble.alphaValue = clamped;
+    ADGlowSetOpacity(clamped);
 }
 
 void ADPump(NSApplication *app) {
