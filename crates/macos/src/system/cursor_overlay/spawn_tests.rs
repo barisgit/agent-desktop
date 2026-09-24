@@ -63,7 +63,7 @@ fn check_acknowledgement(phase: agent_desktop_core::CursorPhase, accepted: bool)
         .unwrap()
         .as_nanos();
     let path = std::path::PathBuf::from(format!(
-        "/tmp/ca-{}-{unique:x}.sock",
+        "/tmp/ca-{}-{phase:?}-{unique:x}.sock",
         std::process::id()
     ));
     let result = std::panic::catch_unwind(|| {
