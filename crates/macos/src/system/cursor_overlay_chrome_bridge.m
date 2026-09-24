@@ -148,21 +148,13 @@ NSWindow *ADWindow(NSRect frame) {
     return window;
 }
 
-void ADFadeWindows(NSWindow *pointer, NSWindow *bubble, bool (*targetVisible)(void)) {
-    NSApplication *app = NSApplication.sharedApplication;
-    for (double step = 1.0; step > 0.0; step -= 0.08) {
-        if (!targetVisible()) {
-            break;
-        }
-        pointer.alphaValue = step;
-        bubble.alphaValue = step;
-        ADPump(app);
-        [NSThread sleepForTimeInterval:0.012];
-    }
-    [pointer orderOut:nil];
-    [bubble orderOut:nil];
-    pointer.alphaValue = 1.0;
-    bubble.alphaValue = 1.0;
+/// Sets the pointer and label opacity without ordering either window, so a
+/// cue that target-visibility gating has hidden stays hidden. The renderer
+/// resets both to 1.0 before every presentation and after clearing a pose.
+void ADSetOpacity(NSWindow *pointer, NSWindow *bubble, double alpha) {
+    CGFloat clamped = (CGFloat)fmin(fmax(alpha, 0.0), 1.0);
+    pointer.alphaValue = clamped;
+    bubble.alphaValue = clamped;
 }
 
 void ADPump(NSApplication *app) {

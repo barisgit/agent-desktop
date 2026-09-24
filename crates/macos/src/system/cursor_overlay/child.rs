@@ -10,7 +10,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use super::bridge;
-use super::pose::{OverlayState, apply_landing_memory, expire_pose, target_instruction};
+use super::pose::{OverlayState, apply_landing_memory, fade_pose, target_instruction};
 
 pub(super) const MARKER: &str = "AGENT_DESKTOP_CURSOR_OVERLAY_CHILD";
 pub(super) const SOCKET_ENV: &str = "AGENT_DESKTOP_CURSOR_OVERLAY_SOCKET";
@@ -79,7 +79,7 @@ fn run() -> Result<(), AdapterError> {
     let mut checked_session = std::time::Instant::now();
     loop {
         if !bridge::drag_active() {
-            expire_pose(&mut state, Instant::now(), bridge::rest);
+            fade_pose(&mut state, Instant::now(), bridge::opacity, bridge::rest);
         }
         if checked_session.elapsed() >= Duration::from_secs(1) {
             if !session_active(initial.session_id(), initial.agent_id()) {
@@ -143,7 +143,7 @@ fn prepare_stream(stream: &UnixStream) -> std::io::Result<()> {
 fn handle(control: &CursorOverlayControl, state: &mut OverlayState) -> Result<bool, AdapterError> {
     control.validate()?;
     if !bridge::drag_active() {
-        expire_pose(state, Instant::now(), bridge::rest);
+        fade_pose(state, Instant::now(), bridge::opacity, bridge::rest);
     }
     if control.is_disable() {
         return Ok(false);

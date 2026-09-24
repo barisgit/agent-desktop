@@ -46,7 +46,6 @@ extern bool agent_desktop_cursor_overlay_target_point(double *output);
 extern bool agent_desktop_cursor_overlay_label_position(double x, double y, double width,
                                                         double height, double *output);
 
-static void ADDragCancel(void);
 static void ADMoveCursor(const AgentDesktopCursorFrame *frame, double mainHeight);
 
 static void ADDragCancel(void) {
@@ -208,11 +207,7 @@ void agent_desktop_cursor_overlay_idle(void) {
 }
 
 void agent_desktop_cursor_overlay_stop(void) {
-    ADDragCancel();
-    [ADCursorWindow orderOut:nil];
-    [ADBubbleWindow orderOut:nil];
-    [ADRipple orderOut:nil];
-    ADHighlightStop();
+    ADSuppress();
     ADPersistentCursorPoseClear(&ADPersistentPose);
     ADCursorWindow = nil;
     ADPointer = nil;
@@ -226,9 +221,13 @@ void agent_desktop_cursor_overlay_hide(void) {
     ADSuppress();
 }
 
+void agent_desktop_cursor_overlay_opacity(double alpha) {
+    ADSetOpacity(ADCursorWindow, ADBubbleWindow, alpha);
+}
+
 void agent_desktop_cursor_overlay_rest(void) {
-    ADFadeWindows(ADCursorWindow, ADBubbleWindow, agent_desktop_cursor_overlay_target_visible);
     ADSuppress();
+    ADSetOpacity(ADCursorWindow, ADBubbleWindow, 1.0);
     ADPersistentCursorPoseClear(&ADPersistentPose);
 }
 
@@ -319,6 +318,7 @@ bool agent_desktop_cursor_overlay_run(const AgentDesktopCursorFrame *frames,
                 ADRipple = ADRippleWindow();
             }
             ADTintPointer(ADPointer);
+            ADSetOpacity(ADCursorWindow, ADBubbleWindow, 1.0);
 
             bool showsBubble = config->label != NULL && config->label[0] != '\0';
             NSString *nextLabel = showsBubble ? @(config->label) : @"";

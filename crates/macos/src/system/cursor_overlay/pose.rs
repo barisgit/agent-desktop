@@ -3,15 +3,18 @@ use agent_desktop_core::{
 };
 use std::time::{Duration, Instant};
 
-/// Idle time after the latest targeted action before its cue fades for good.
-pub(super) const TARGET_POSE_IDLE_MS: u64 = 3_000;
+/// Time the latest targeted action's cue stays fully visible.
+pub(super) const TARGET_POSE_IDLE_MS: u64 = 8_000;
+
+/// Time the cue then takes to fade linearly to nothing before it is cleared.
+pub(super) const TARGET_POSE_FADE_MS: u64 = 1_000;
 
 /// Renderer-side memory for one agent cursor.
 ///
-/// `at` is where the next travel animation starts. `pose_deadline` bounds how
-/// long the native renderer may keep presenting the latest targeted pose. Only a
-/// new targeted instruction moves the deadline; target visibility changes and
-/// Hide/Show lifecycle controls never extend, reset, or replay it.
+/// `at` is where the next travel animation starts. `pose_deadline` marks when
+/// the latest targeted pose starts fading; it is cleared once the fade ends.
+/// Only a new targeted instruction moves the deadline; target visibility
+/// changes and Hide/Show lifecycle controls never extend, reset, or replay it.
 #[derive(Default)]
 pub(super) struct OverlayState {
     pub(super) style: CursorOverlayStyle,
@@ -19,26 +22,54 @@ pub(super) struct OverlayState {
     pub(super) pose_deadline: Option<Instant>,
 }
 
+enum PoseFade {
+    Steady,
+    Fading(f64),
+    Expired,
+}
+
 impl OverlayState {
+    /// Callers must also restore full native opacity for the new pose; the
+    /// renderer does so at the start of every presentation.
     pub(super) fn record_target_pose(&mut self, now: Instant) {
         self.pose_deadline = Some(now + Duration::from_millis(TARGET_POSE_IDLE_MS));
     }
 
-    fn expire_pose(&mut self, now: Instant) -> bool {
-        if self.pose_deadline.is_none_or(|deadline| now < deadline) {
-            return false;
+    fn pose_fade(&mut self, now: Instant) -> PoseFade {
+        let Some(faded) = self
+            .pose_deadline
+            .and_then(|deadline| now.checked_duration_since(deadline))
+        else {
+            return PoseFade::Steady;
+        };
+        let fade = Duration::from_millis(TARGET_POSE_FADE_MS);
+        if faded < fade {
+            return PoseFade::Fading(1.0 - faded.as_secs_f64() / fade.as_secs_f64());
         }
         self.at = None;
         self.pose_deadline = None;
-        true
+        PoseFade::Expired
     }
 }
 
-/// Fades the retained pose once its idle deadline passes. Callers skip this
-/// while a drag is in progress so an active drag is never expired mid-gesture.
-pub(super) fn expire_pose(state: &mut OverlayState, now: Instant, fade: impl FnOnce()) {
-    if state.expire_pose(now) {
-        fade();
+/// Advances the retained pose's idle fade by one renderer tick.
+///
+/// The fade is driven by these ticks rather than a blocking native loop so the
+/// renderer keeps accepting instructions: an action arriving mid-fade is
+/// presented (and acknowledged) immediately. `opacity` receives the fraction to
+/// apply during the fade window; `expire` clears the pose once it ends. A tick
+/// that lands after the whole window skips straight to `expire`. Callers skip
+/// this while a drag is in progress so an active drag never fades mid-gesture.
+pub(super) fn fade_pose(
+    state: &mut OverlayState,
+    now: Instant,
+    opacity: impl FnOnce(f64),
+    expire: impl FnOnce(),
+) {
+    match state.pose_fade(now) {
+        PoseFade::Steady => {}
+        PoseFade::Fading(alpha) => opacity(alpha),
+        PoseFade::Expired => expire(),
     }
 }
 

@@ -17,7 +17,7 @@ const AgentDesktopCursorStyle *ADStyle(void);
 
 NSWindow *ADWindow(NSRect frame);
 void ADPump(NSApplication *app);
-void ADFadeWindows(NSWindow *pointer, NSWindow *bubble, bool (*targetVisible)(void));
+void ADSetOpacity(NSWindow *pointer, NSWindow *bubble, double alpha);
 void ADFreezeLayer(CALayer *layer);
 CALayer *ADPointerLayer(void);
 void ADTintPointer(CALayer *pointer);

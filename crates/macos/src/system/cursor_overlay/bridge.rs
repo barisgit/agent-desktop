@@ -48,6 +48,7 @@ unsafe extern "C" {
     fn agent_desktop_cursor_overlay_style(style: *const NativeCursorStyle);
     fn agent_desktop_cursor_overlay_idle();
     fn agent_desktop_cursor_overlay_hide();
+    fn agent_desktop_cursor_overlay_opacity(alpha: f64);
     fn agent_desktop_cursor_overlay_rest();
     fn agent_desktop_cursor_overlay_show();
     fn agent_desktop_cursor_overlay_stop();
@@ -182,6 +183,10 @@ pub(super) fn stop() {
 
 pub(super) fn hide() {
     unsafe { agent_desktop_cursor_overlay_hide() }
+}
+
+pub(super) fn opacity(alpha: f64) {
+    unsafe { agent_desktop_cursor_overlay_opacity(alpha) }
 }
 
 pub(super) fn rest() {

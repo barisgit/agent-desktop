@@ -8,10 +8,21 @@ fn target(x: f64) -> CursorOverlayInstruction {
         .with_window((ProcessId::new(10), "w-42".into()))
 }
 
-fn fades_at(state: &mut OverlayState, at: Instant) -> usize {
-    let mut fades = 0;
-    expire_pose(state, at, || fades += 1);
-    fades
+fn ms(value: u64) -> Duration {
+    Duration::from_millis(value)
+}
+
+/// Ticks the pose once and reports the opacity it set, if any, and whether the
+/// tick expired the pose.
+fn tick(state: &mut OverlayState, at: Instant) -> (Option<f64>, bool) {
+    let mut opacity = None;
+    let mut expired = false;
+    fade_pose(state, at, |alpha| opacity = Some(alpha), || expired = true);
+    (opacity, expired)
+}
+
+fn expiries_at(state: &mut OverlayState, at: Instant) -> usize {
+    usize::from(tick(state, at).1)
 }
 
 #[test]
@@ -30,38 +41,85 @@ fn enable_and_non_target_controls_do_not_select_an_instruction_to_render() {
 }
 
 #[test]
-fn target_pose_fades_at_three_seconds_and_a_new_target_resets_deadline() {
+fn target_pose_stays_fully_visible_for_eight_seconds() {
+    assert_eq!(TARGET_POSE_IDLE_MS, 8_000);
     let now = Instant::now();
     let mut state = OverlayState::default();
-    let mut fades = 0;
     state.record_target_pose(now);
 
-    expire_pose(
-        &mut state,
-        now + Duration::from_millis(TARGET_POSE_IDLE_MS - 1),
-        || fades += 1,
+    assert_eq!(tick(&mut state, now), (None, false));
+    assert_eq!(
+        tick(&mut state, now + ms(TARGET_POSE_IDLE_MS - 1)),
+        (None, false)
     );
-    assert_eq!(fades, 0);
+    assert!(state.pose_deadline.is_some());
+}
 
-    state.record_target_pose(now + Duration::from_millis(2_000));
-    expire_pose(
-        &mut state,
-        now + Duration::from_millis(TARGET_POSE_IDLE_MS),
-        || fades += 1,
+#[test]
+fn target_pose_fades_linearly_over_one_second_then_expires_once() {
+    assert_eq!(TARGET_POSE_FADE_MS, 1_000);
+    let now = Instant::now();
+    let mut state = OverlayState::default();
+    state.record_target_pose(now);
+
+    assert_eq!(
+        tick(&mut state, now + ms(TARGET_POSE_IDLE_MS)),
+        (Some(1.0), false)
     );
-    assert_eq!(fades, 0);
-    expire_pose(
-        &mut state,
-        now + Duration::from_millis(2_000 + TARGET_POSE_IDLE_MS),
-        || fades += 1,
+    let (quarter, expired) = tick(&mut state, now + ms(TARGET_POSE_IDLE_MS + 250));
+    assert!(!expired);
+    assert!((quarter.expect("fading") - 0.75).abs() < 1e-9);
+    let (late, expired) = tick(&mut state, now + ms(TARGET_POSE_IDLE_MS + 900));
+    assert!(!expired);
+    assert!((late.expect("fading") - 0.1).abs() < 1e-9);
+
+    let end = now + ms(TARGET_POSE_IDLE_MS + TARGET_POSE_FADE_MS);
+    assert_eq!(tick(&mut state, end), (None, true));
+    assert_eq!(state.pose_deadline, None);
+    assert_eq!(tick(&mut state, end + ms(1)), (None, false));
+}
+
+#[test]
+fn a_new_target_mid_fade_restarts_the_full_visibility_window() {
+    let now = Instant::now();
+    let mut state = OverlayState::default();
+    state.record_target_pose(now);
+    let mid_fade = now + ms(TARGET_POSE_IDLE_MS + 500);
+    assert!(tick(&mut state, mid_fade).0.is_some());
+
+    state.record_target_pose(mid_fade);
+
+    assert_eq!(tick(&mut state, mid_fade), (None, false));
+    assert_eq!(
+        tick(&mut state, mid_fade + ms(TARGET_POSE_IDLE_MS - 1)),
+        (None, false)
     );
-    assert_eq!(fades, 1);
-    expire_pose(
-        &mut state,
-        now + Duration::from_millis(2_001 + TARGET_POSE_IDLE_MS),
-        || fades += 1,
+    assert_eq!(
+        expiries_at(
+            &mut state,
+            now + ms(TARGET_POSE_IDLE_MS + TARGET_POSE_FADE_MS)
+        ),
+        0
     );
-    assert_eq!(fades, 1);
+    assert_eq!(
+        expiries_at(
+            &mut state,
+            mid_fade + ms(TARGET_POSE_IDLE_MS + TARGET_POSE_FADE_MS)
+        ),
+        1
+    );
+}
+
+#[test]
+fn a_skipped_fade_window_expires_immediately_without_an_opacity_step() {
+    let now = Instant::now();
+    let mut state = OverlayState::default();
+    state.record_target_pose(now);
+
+    assert_eq!(
+        tick(&mut state, now + ms(TARGET_POSE_IDLE_MS + 60_000)),
+        (None, true)
+    );
 }
 
 #[test]
@@ -80,25 +138,27 @@ fn hide_forgets_the_landing_but_keeps_the_idle_deadline() {
     );
 
     assert_eq!(state.at, None);
+    assert_eq!(state.pose_deadline, Some(now + ms(TARGET_POSE_IDLE_MS)));
     assert_eq!(
-        state.pose_deadline,
-        Some(now + Duration::from_millis(TARGET_POSE_IDLE_MS))
+        tick(&mut state, now + ms(TARGET_POSE_IDLE_MS - 1)),
+        (None, false)
+    );
+    assert!(
+        tick(&mut state, now + ms(TARGET_POSE_IDLE_MS + 500))
+            .0
+            .is_some()
     );
     assert_eq!(
-        fades_at(
+        expiries_at(
             &mut state,
-            now + Duration::from_millis(TARGET_POSE_IDLE_MS - 1)
+            now + ms(TARGET_POSE_IDLE_MS + TARGET_POSE_FADE_MS)
         ),
-        0
-    );
-    assert_eq!(
-        fades_at(&mut state, now + Duration::from_millis(TARGET_POSE_IDLE_MS)),
         1
     );
 }
 
 #[test]
-fn show_before_or_after_the_deadline_never_extends_it() {
+fn show_during_or_after_the_fade_never_extends_it() {
     let now = Instant::now();
     let mut state = OverlayState::default();
     state.record_target_pose(now);
@@ -110,18 +170,25 @@ fn show_before_or_after_the_deadline_never_extends_it() {
         None,
     );
     apply_landing_memory(&show, &mut state, None);
+    let (opacity, _) = tick(&mut state, now + ms(TARGET_POSE_IDLE_MS + 500));
+    assert!((opacity.expect("still fading") - 0.5).abs() < 1e-9);
+
+    apply_landing_memory(&show, &mut state, None);
     assert_eq!(
-        fades_at(&mut state, now + Duration::from_millis(TARGET_POSE_IDLE_MS)),
+        expiries_at(
+            &mut state,
+            now + ms(TARGET_POSE_IDLE_MS + TARGET_POSE_FADE_MS)
+        ),
         1
     );
 
     apply_landing_memory(&show, &mut state, None);
     assert_eq!(state.pose_deadline, None);
     assert_eq!(
-        fades_at(
+        tick(
             &mut state,
-            now + Duration::from_millis(2 * TARGET_POSE_IDLE_MS)
+            now + ms(2 * (TARGET_POSE_IDLE_MS + TARGET_POSE_FADE_MS))
         ),
-        0
+        (None, false)
     );
 }
