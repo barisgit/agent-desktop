@@ -1,6 +1,6 @@
 use crate::{
-    AdapterError, BackgroundPointerReport, ClipboardContent, ClipboardFormat, Deadline, DragParams,
-    InteractionLease, KeyCombo, MouseEvent, WindowInfo,
+    AdapterError, BackgroundDeliveryReport, BackgroundKeyInput, ClipboardContent, ClipboardFormat,
+    Deadline, DragParams, InteractionLease, KeyCombo, MouseEvent, WindowInfo,
 };
 
 /// `get_clipboard`/`set_clipboard` were removed pre-1.0 in favor of
@@ -31,8 +31,26 @@ pub trait InputOps: Send + Sync {
         _window: &WindowInfo,
         _event: MouseEvent,
         _lease: &InteractionLease,
-    ) -> Result<BackgroundPointerReport, AdapterError> {
+    ) -> Result<BackgroundDeliveryReport, AdapterError> {
         Err(AdapterError::not_supported("background_mouse_event"))
+    }
+
+    /// Posts `input` as key events to the process that owns `window`, aimed
+    /// at that window, without activating the app, moving the pointer, or
+    /// requiring a verified focused element.
+    ///
+    /// Callers must have re-verified `window` (pid, process instance, and
+    /// exact window id) under `lease` and must never route app menu shortcuts
+    /// through this path; the target app alone decides how it handles the
+    /// keys. The report is the same evidence as for background pointer
+    /// delivery; the effect itself is never verified here.
+    fn background_key_input(
+        &self,
+        _window: &WindowInfo,
+        _input: &BackgroundKeyInput,
+        _lease: &InteractionLease,
+    ) -> Result<BackgroundDeliveryReport, AdapterError> {
+        Err(AdapterError::not_supported("background_key_input"))
     }
 
     fn key_event(

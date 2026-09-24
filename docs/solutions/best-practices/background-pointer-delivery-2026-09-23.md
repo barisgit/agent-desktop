@@ -62,7 +62,8 @@ background-computer-use (`NativeWindowServerPreparation.swift`,
 deliberately not a CLI flag. Unset or empty means the recommended set
 `route,skylight,activate,guard`; `none` means the bare 7f6e4f53 path; any
 other value is a comma-separated subset of `route`, `skylight`, `activate`,
-`guard`, `primer` (an unknown name is `INVALID_ARGS`, not delivered). The
+`guard`, `primer` (an unknown name is `INVALID_ARGS`, not delivered; the
+keyboard-only `auth` and `keywindow` are accepted and ignored here). The
 result lists the requested layers in `data.background.layers` and any
 requested layer that was unavailable or failed in `data.background.degraded`.
 
@@ -85,7 +86,9 @@ fields 28/29 instead; those are the wrong fields.
 3. **activate.** Sends a 248-byte window-server event record to the **target
    only** with `SLPSPostEventRecordTo`: `[0x04]=0xF8`, `[0x08]=0x0D`,
    `[0x3C..0x40]` = window number (little-endian), `[0x8A]=0x01`, then waits
-   50 ms. This is background-computer-use's `targetOnlyFocus`: the target's
+   50 ms. The record lives in a zeroed 256-byte buffer because
+   `SLPSPostEventRecordTo` reads up to 8 bytes past the declared 0xF8 on
+   macOS 14.2.1+ and 26 (the crash fixed in a896d9c5). This is background-computer-use's `targetOnlyFocus`: the target's
    window believes it is focused, which is intended to satisfy Chromium's
    `shouldIgnoreMouseEvent:` and first-mouse checks (not yet confirmed live). No defocus record is
    ever sent to the user's app (cua and yabai send one; that is what steals
@@ -152,7 +155,9 @@ otherwise `delivered_unverified` / `retry: unsafe` with
   hover has revealed a control.
 - **Sandboxed or hardened apps** (Mail, Notes, App Store) may drop
   pid-targeted events silently.
-- **Keys are out of scope.** macOS delivers keystrokes to the key window.
+- **Keys use a sibling path.** `press --background` and `type --background`
+  are described in `background-keyboard-delivery-2026-09-24.md`; they share
+  this runner, report, and layer variable.
 - **Effects are not verified.** Observe with `snapshot` after delivery.
 
 ## Verification

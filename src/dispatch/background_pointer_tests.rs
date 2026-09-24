@@ -1,7 +1,7 @@
 use super::super::dispatch;
 use crate::cli::Commands;
 use crate::cli_args::actions::{HoverArgs, MouseClickArgs, MouseMoveArgs};
-use crate::dispatch::test_support::{BackgroundPointerAdapter, HomeGuard};
+use crate::dispatch::test_support::{BackgroundAdapter, HomeGuard};
 use agent_desktop_core::{PermissionReport, context::CommandContext};
 use clap::Parser;
 
@@ -9,10 +9,10 @@ fn run(
     command: Commands,
     headed: bool,
 ) -> (
-    BackgroundPointerAdapter,
+    BackgroundAdapter,
     Result<serde_json::Value, agent_desktop_core::AppError>,
 ) {
-    let adapter = BackgroundPointerAdapter::new();
+    let adapter = BackgroundAdapter::new();
     let context = CommandContext::default().with_headed(headed);
     let result = dispatch(command, &adapter, &PermissionReport::default(), &context);
     (adapter, result)
@@ -30,7 +30,7 @@ fn background_mouse_click_routes_to_background_delivery_only() {
             "mouse-click",
             "--background",
             "--window-id",
-            BackgroundPointerAdapter::WINDOW_ID,
+            BackgroundAdapter::WINDOW_ID,
             "--xy",
             "10,20",
         ]),
@@ -41,7 +41,7 @@ fn background_mouse_click_routes_to_background_delivery_only() {
     assert_eq!(value["clicked"], true);
     assert_eq!(
         value["background"]["window_id"],
-        BackgroundPointerAdapter::WINDOW_ID
+        BackgroundAdapter::WINDOW_ID
     );
     let delivered = adapter.background.lock().unwrap();
     assert_eq!(delivered.len(), 1);
@@ -61,7 +61,7 @@ fn background_mouse_move_routes_to_background_delivery() {
                 "mouse-move",
                 "--background",
                 "--window-id",
-                BackgroundPointerAdapter::WINDOW_ID,
+                BackgroundAdapter::WINDOW_ID,
                 "--xy",
                 "10,20",
             ])
@@ -118,7 +118,7 @@ fn background_with_headed_is_rejected() {
             "mouse-click",
             "--background",
             "--window-id",
-            BackgroundPointerAdapter::WINDOW_ID,
+            BackgroundAdapter::WINDOW_ID,
             "--xy",
             "10,20",
         ]),
@@ -156,7 +156,7 @@ fn background_hover_by_xy_routes_to_background_delivery() {
                 "hover",
                 "--background",
                 "--window-id",
-                BackgroundPointerAdapter::WINDOW_ID,
+                BackgroundAdapter::WINDOW_ID,
                 "--xy",
                 "30,40",
             ])

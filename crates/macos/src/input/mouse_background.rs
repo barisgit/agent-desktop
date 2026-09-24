@@ -1,4 +1,6 @@
-use agent_desktop_core::{AdapterError, BackgroundPointerReport, Deadline, MouseEvent, WindowInfo};
+use agent_desktop_core::{
+    AdapterError, BackgroundDeliveryReport, Deadline, MouseEvent, WindowInfo,
+};
 use core_graphics::geometry::CGPoint;
 
 use crate::actions::DeliveryTracker;
@@ -31,7 +33,7 @@ pub(crate) fn deliver(
     window: &WindowInfo,
     event: MouseEvent,
     deadline: Deadline,
-) -> Result<BackgroundPointerReport, AdapterError> {
+) -> Result<BackgroundDeliveryReport, AdapterError> {
     let prepared =
         prepare(window, &event).map_err(|error| DeliveryTracker::default().annotate(error))?;
     let mut io = SystemDeliveryIo::new(deadline);
@@ -44,7 +46,7 @@ pub(crate) fn deliver(
 /// failures are reported as not delivered.
 fn prepare(window: &WindowInfo, event: &MouseEvent) -> Result<Prepared, AdapterError> {
     validate_point(&event.point)?;
-    let layers = BackgroundLayers::from_env()?;
+    let layers = BackgroundLayers::pointer_from_env()?;
     let window_number = window_number(window)?;
     let pid = crate::system::process_identity::to_pid_t(window.pid)?;
 

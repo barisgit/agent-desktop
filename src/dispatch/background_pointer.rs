@@ -22,7 +22,7 @@ pub(super) fn reject_window_id_without_background(window_id: Option<&str>) -> Re
     }
     Err(AppError::invalid_input_with_suggestion(
         "--window-id requires --background",
-        "Add --background to post to that window without moving the cursor, or drop --window-id.",
+        "Add --background to post to that window's process, or drop --window-id.",
     ))
 }
 

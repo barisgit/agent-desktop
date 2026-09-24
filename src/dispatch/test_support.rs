@@ -64,24 +64,31 @@ impl SystemOps for FailingOverlayAdapter {
     }
 }
 
-/// Records background pointer deliveries and counts real cursor events so
-/// routing tests can prove which path a command took.
-pub(crate) struct BackgroundPointerAdapter {
+/// Records background pointer and keyboard deliveries and counts real cursor
+/// events so routing tests can prove which path a command took.
+pub(crate) struct BackgroundAdapter {
     pub(crate) background: Mutex<
         Vec<(
             agent_desktop_core::WindowInfo,
             agent_desktop_core::MouseEvent,
         )>,
     >,
+    pub(crate) background_keys: Mutex<
+        Vec<(
+            agent_desktop_core::WindowInfo,
+            agent_desktop_core::BackgroundKeyInput,
+        )>,
+    >,
     pub(crate) real_mouse_events: Mutex<u32>,
 }
 
-impl BackgroundPointerAdapter {
+impl BackgroundAdapter {
     pub(crate) const WINDOW_ID: &'static str = "w-9555";
 
     pub(crate) fn new() -> Self {
         Self {
             background: Mutex::new(Vec::new()),
+            background_keys: Mutex::new(Vec::new()),
             real_mouse_events: Mutex::new(0),
         }
     }
@@ -104,7 +111,7 @@ impl BackgroundPointerAdapter {
     }
 }
 
-impl ObservationOps for BackgroundPointerAdapter {
+impl ObservationOps for BackgroundAdapter {
     fn list_windows(
         &self,
         _filter: &agent_desktop_core::WindowFilter,
@@ -114,9 +121,9 @@ impl ObservationOps for BackgroundPointerAdapter {
     }
 }
 
-impl ActionOps for BackgroundPointerAdapter {}
+impl ActionOps for BackgroundAdapter {}
 
-impl InputOps for BackgroundPointerAdapter {
+impl InputOps for BackgroundAdapter {
     fn mouse_event(
         &self,
         _event: agent_desktop_core::MouseEvent,
@@ -131,16 +138,29 @@ impl InputOps for BackgroundPointerAdapter {
         window: &agent_desktop_core::WindowInfo,
         event: agent_desktop_core::MouseEvent,
         _lease: &agent_desktop_core::InteractionLease,
-    ) -> Result<agent_desktop_core::BackgroundPointerReport, AdapterError> {
+    ) -> Result<agent_desktop_core::BackgroundDeliveryReport, AdapterError> {
         self.background
             .lock()
             .unwrap()
             .push((window.clone(), event));
-        Ok(agent_desktop_core::BackgroundPointerReport::default())
+        Ok(agent_desktop_core::BackgroundDeliveryReport::default())
+    }
+
+    fn background_key_input(
+        &self,
+        window: &agent_desktop_core::WindowInfo,
+        input: &agent_desktop_core::BackgroundKeyInput,
+        _lease: &agent_desktop_core::InteractionLease,
+    ) -> Result<agent_desktop_core::BackgroundDeliveryReport, AdapterError> {
+        self.background_keys
+            .lock()
+            .unwrap()
+            .push((window.clone(), input.clone()));
+        Ok(agent_desktop_core::BackgroundDeliveryReport::default())
     }
 }
 
-impl SystemOps for BackgroundPointerAdapter {
+impl SystemOps for BackgroundAdapter {
     fn acquire_interaction_lease(
         &self,
         deadline: agent_desktop_core::Deadline,

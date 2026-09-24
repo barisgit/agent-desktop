@@ -9,7 +9,7 @@ Ref-based actions run in two modes, Playwright-style:
 - **Headless (default).** Semantic accessibility operations only. The action never silently steals focus, moves the cursor, synthesizes keyboard input, or uses the pasteboard. When the semantic path cannot perform the action it fails closed.
 - **`--headed`.** A global flag (`agent-desktop --headed click @s8f3k2p9:e5`) that authorizes the action's core-owned preconditions. Ref actions that need keyboard delivery focus the exact source window; pointer actions focus that window and require a verified target point before the adapter runs. On macOS, `click`, `right-click`, `type`, `clear`, and `scroll` are physical-first; `double-click`, `triple-click`, `hover`, and `drag` are physical-only. `expand`, `collapse`, `set-value`, `select`, `toggle`, `check`, `uncheck`, `focus`, and `scroll-to` stay semantic.
 
-`press` is explicit physical keyboard input. `hover`, `drag`, `mouse-move`, `mouse-click`, and `mouse-wheel` are explicit physical cursor input and require `--headed`, except that `hover`, `mouse-move`, and `mouse-click` also accept the opt-in, best-effort `--background` mode (see [background-input.md](background-input.md)), which posts synthetic events to one exact window without moving the cursor. Raw coordinates carry no window identity, so they never focus an app. The held-input names (`key-down`, `key-up`, `mouse-down`, `mouse-up`) are reserved and return `ACTION_NOT_SUPPORTED` until a stateful daemon can own the hold lifetime.
+`press` is explicit physical keyboard input; `press` and `type` also accept the opt-in, best-effort `--background` mode (see [background-input.md](background-input.md#keyboard-press-type)), which posts keys to one exact window without activating its app. `hover`, `drag`, `mouse-move`, `mouse-click`, and `mouse-wheel` are explicit physical cursor input and require `--headed`, except that `hover`, `mouse-move`, and `mouse-click` also accept the opt-in, best-effort `--background` mode (see [background-input.md](background-input.md)), which posts synthetic events to one exact window without moving the cursor. Raw coordinates carry no window identity, so they never focus an app. The held-input names (`key-down`, `key-up`, `mouse-down`, `mouse-up`) are reserved and return `ACTION_NOT_SUPPORTED` until a stateful daemon can own the hold lifetime.
 
 `--headed` is a global flag and also applies to every `batch` entry.
 
@@ -143,7 +143,7 @@ Headless uses semantic context-menu actions. `--headed` performs a physical righ
 agent-desktop type @s8f3k2p9:e2 "hello@example.com"
 agent-desktop type @s8f3k2p9:e2 "multi line\ntext"
 ```
-Headless `type` uses `AXSelectedText` without focusing the app or synthesizing keys. Pass `--headed` to focus the target and synthesize keyboard input. Use `set-value` when direct semantic value assignment is the intended interaction.
+Headless `type` uses `AXSelectedText` without focusing the app or synthesizing keys. Pass `--headed` to focus the target and synthesize keyboard input. Use `set-value` when direct semantic value assignment is the intended interaction. For editors that ignore `AXSelectedText` (VS Code, other Electron apps) in a window the user is not using, use `type <ref> <text> --background` ([background-input.md](background-input.md#keyboard-press-type)).
 
 When the value and selection are readable, insertion checks the resulting value. A mismatch or unavailable readback returns `ACTION_FAILED`; inspect the current state and delivery disposition before writing again. Secure-field redaction is the explicit exception described above: a delivered write remains unverified rather than failing solely because its value is hidden.
 
@@ -248,6 +248,8 @@ agent-desktop press cmd+a --app "TextEdit"
 | Flag | Description |
 |------|-------------|
 | `--app` | Target application; key delivery is PID-targeted, and `--headed` additionally focuses its exact window first |
+| `--background` | Post the combo to the `--window-id` window's process as key events only (no menu or AX mapping, no activation); conflicts with `--headed` and `--app` |
+| `--window-id` | Exact target window for `--background` (from `list-windows`) |
 
 `press` reports `delivered_unverified`: delivery does not prove the shortcut produced the intended UI. Use the global CLI selector flags to wait for an expected accessible element in the requested app after sending the key once:
 
@@ -272,6 +274,10 @@ Use the actual window title for the current app language. To check a window that
 **Modifiers:** `cmd`, `ctrl`, `alt`, `shift` — combine with `+`
 
 Dangerous shortcuts (e.g. `cmd+q`, `ctrl+cmd+q`, `cmd+alt+esc`, `cmd+shift+delete`) are refused with `POLICY_DENIED`. Normalization covers modifier order and key-name aliases (`escape`/`esc`, `backspace`/`delete`). The block is the **platform adapter's** decision, not core's — the calling agent stays in control: pass `--force` to send a flagged `press` combo anyway (`agent-desktop press cmd+q --force`). The reserved held-key names reject even when `--force` is present.
+
+#### Background keys (`--background`)
+
+`press` and `type` accept `--background` (macOS only), an explicit opt-in, best-effort mode that posts key events to one exact window's process without activating its app. Targeting, results, deadlines, and limits are in [background-input.md](background-input.md#keyboard-press-type).
 
 ### key-down / key-up
 

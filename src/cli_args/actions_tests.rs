@@ -229,3 +229,21 @@ fn coordinate_flags_accept_negative_coordinates() {
     assert_eq!(drag.target.from_xy.as_deref(), Some("-5,6"));
     assert_eq!(drag.target.to_xy.as_deref(), Some("-7,-8"));
 }
+
+#[test]
+fn background_key_flags_parse_and_default_off_for_cli_and_batch() {
+    let press =
+        PressArgs::try_parse_from(["press", "cmd+s", "--background", "--window-id", "w-15592"])
+            .unwrap();
+    let typed = TypeArgs::try_parse_from(["type", "@s1:e1", "hi", "--background"]).unwrap();
+    let press_batch: PressArgs =
+        serde_json::from_value(serde_json::json!({ "combo": "return" })).unwrap();
+    let type_batch: TypeArgs =
+        serde_json::from_value(serde_json::json!({ "ref_id": "@e1", "text": "hi" })).unwrap();
+
+    assert!(press.background);
+    assert_eq!(press.window_id.as_deref(), Some("w-15592"));
+    assert!(typed.background);
+    assert!(!press_batch.background && press_batch.window_id.is_none());
+    assert!(!type_batch.background);
+}

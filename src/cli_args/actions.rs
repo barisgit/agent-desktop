@@ -44,6 +44,12 @@ pub(crate) struct TypeArgs {
     )]
     #[serde(default = "default_ref_timeout_ms")]
     pub timeout_ms: u64,
+    #[arg(
+        long,
+        help = "Post the text as Unicode key events to the ref's window process without activating the app or taking keyboard focus (macOS); conflicts with --headed"
+    )]
+    #[serde(default)]
+    pub background: bool,
 }
 
 #[derive(Parser, Debug, Deserialize)]
@@ -149,6 +155,19 @@ pub(crate) struct PressArgs {
     )]
     #[serde(default)]
     pub force: bool,
+    #[arg(
+        long,
+        help = "Post the combo to the --window-id window's process without activating the app, taking keyboard focus, or matching menu items (macOS); conflicts with --headed and --app"
+    )]
+    #[serde(default)]
+    pub background: bool,
+    #[arg(
+        long = "window-id",
+        value_name = "WINDOW_ID",
+        help = "Exact target window for --background (from list-windows, e.g. w-15592)"
+    )]
+    #[serde(default)]
+    pub window_id: Option<String>,
 }
 
 #[derive(Parser, Debug, Deserialize)]

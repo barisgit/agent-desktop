@@ -17,6 +17,7 @@ use crate::cli_args::{
     RefArgs,
     actions::{ScrollArgs, SelectArgs, SetValueArgs, TypeArgs},
 };
+use crate::dispatch::background_keyboard;
 use crate::dispatch::parse::parse_direction;
 
 pub(super) fn click(
@@ -56,6 +57,9 @@ pub(super) fn type_text(
     adapter: &dyn PlatformAdapter,
     context: &CommandContext,
 ) -> Result<Value, AppError> {
+    if args.background {
+        return background_keyboard::type_text(args, adapter, context);
+    }
     type_text_command::execute(
         type_text_command::TypeArgs {
             ref_id: args.ref_id,

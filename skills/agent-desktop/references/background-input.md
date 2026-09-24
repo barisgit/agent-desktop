@@ -8,7 +8,7 @@ What it does and does not promise:
 
 - **The real cursor stays put** and the target window is not raised.
 - **Focus preservation is best effort.** The target process decides how to react to posted events and may activate itself. A focus guard restores the user's frontmost app when the *target* takes the front, but it never fights a switch to any other app (that is treated as the user switching). Always read `focus_change` and `focus_guard` in the result.
-- **Private macOS SPI.** Delivery uses private SkyLight entry points (`SLEventPostToPid`, `SLPSPostEventRecordTo`, `_SLPSSetFrontProcessWithOptions`, `CGEventSetWindowLocation`) resolved at runtime with `dlsym`. A missing symbol degrades that technique (reported in `degraded`) instead of failing to load; posting then falls back to the public `CGEventPostToPid`.
+- **Private macOS SPI.** Delivery uses private SkyLight entry points (`SLEventPostToPid`, `SLPSPostEventRecordTo`, `_SLPSSetFrontProcessWithOptions`, `CGEventSetWindowLocation`, and for keys `SLSEventAuthenticationMessage`) resolved at runtime with `dlsym`. A missing symbol degrades that technique (reported in `degraded`) instead of failing to load; posting then falls back to the public `CGEventPostToPid`.
 - **Delivery is unverified.** The app may drop the event. Confirm the effect with a fresh `snapshot`.
 
 ## Pointer: `hover`, `mouse-move`, `mouse-click`
@@ -27,6 +27,20 @@ agent-desktop mouse-move --background --window-id w-9555 --xy 500,300
 
 VS Code on a hidden workspace: `snapshot --app Code --window-id w-9555 -i`, then `hover <explorer-header-ref> --background`, re-snapshot, and `click <new-file-ref>` (semantic `AXPress`).
 
+## Keyboard: `press`, `type`
+
+```bash
+agent-desktop press cmd+s --background --window-id w-15592
+agent-desktop type @s8f3k2p9:e7 "hello from background, 42!" --background
+```
+
+Key events go to the process that owns one exact window after target-only records make that window key inside its own process. The app is not activated and the cursor does not move.
+
+- **Target.** `press` requires `--window-id` and rejects `--app`. `type` takes the process and window from its ref and first tries an accessibility focus on the element; the outcome is reported in `background.ax_focus` (`set` or `failed` with a code) and never stops delivery. A stale ref is `STALE_REF` and nothing is sent. Batch entries use `"background": true` and `"window_id"`.
+- **Keys only.** Unlike headless `press`, no key is mapped to a menu item or accessibility action, and the focused element is never read. Text is sent one character at a time as Unicode key events (Return for line breaks, Tab for tabs), up to 10,000 bytes. Dangerous combos still need `--force`.
+- **Result.** Same as the pointer [result](#result). Confirm what was typed with `snapshot`; do not retry blindly, since a retry types the text again.
+- **Limits.** Keys reach the window's current first responder, so type into a ref (or click the field with `--background` first) rather than relying on where focus was left. The app may still resolve a Command combo to one of its own menu items.
+
 ## Result
 
 Success carries `disposition: { delivery: "delivered_unverified", retry: "unsafe" }` and `background: { pid, window_id, focus_change, layers, frontmost_pid_before?, frontmost_pid_after?, degraded?, focus_guard? }`.
@@ -42,7 +56,7 @@ A repeated hover is harmless, but the contract still says `unsafe`: observe the 
 
 ## Deadline and partial delivery
 
-The command deadline, including an enclosing batch deadline, bounds the whole delivery. It is checked before every event that starts something new (a move or a button down). A button that is already down is always released. When the budget runs out, the command stops there and returns `TIMEOUT`:
+The command deadline, including an enclosing batch deadline, bounds the whole delivery. It is checked before every event that starts something new (a move, a button down, or a key down). A button or key that is already down is always released. When the budget runs out, the command stops there and returns `TIMEOUT`:
 
 - nothing posted yet: `not_delivered`, `retry: safe`;
 - some events posted: `delivered_unverified`, `retry: unsafe`, with `details.delivered_events` and `details.planned_events`. Snapshot before deciding what to do next.
@@ -53,4 +67,4 @@ The app decides what to do with the event. Sandboxed or hardened apps may drop i
 
 ## Diagnosis
 
-`AGENT_DESKTOP_BG_LAYERS` narrows the recipe for live diagnosis and is deliberately not a CLI flag: unset selects `route,skylight,activate,guard`; `none` selects bare `CGEventPostToPid`; otherwise list any of `route`, `skylight`, `activate`, `guard`, `primer`. See `docs/solutions/best-practices/background-pointer-delivery-2026-09-23.md`.
+`AGENT_DESKTOP_BG_LAYERS` narrows the recipe for live diagnosis and is deliberately not a CLI flag: unset selects `route,skylight,activate,guard` for the pointer and `route,skylight,auth,activate,keywindow,guard` for keys; `none` selects bare `CGEventPostToPid`; otherwise list any of `route`, `skylight`, `auth`, `activate`, `keywindow`, `guard`, `primer` (a layer that does not apply to a path is ignored there). See `docs/solutions/best-practices/background-pointer-delivery-2026-09-23.md` and `docs/solutions/best-practices/background-keyboard-delivery-2026-09-24.md`.

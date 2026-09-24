@@ -1,17 +1,18 @@
-use agent_desktop_core::{AdapterError, BackgroundPointerReport, Deadline, ErrorCode, WindowInfo};
+use agent_desktop_core::{AdapterError, BackgroundDeliveryReport, Deadline, ErrorCode, WindowInfo};
 use core_graphics::event::CGEvent;
 use std::time::{Duration, Instant};
 
 use crate::actions::DeliveryTracker;
-use crate::input::background_activation::focus_target_window;
+use crate::input::background_activation::{focus_target_window, make_key_window};
 use crate::input::background_focus_guard::{FocusGuard, GUARD_WINDOW, GuardIo};
 use crate::input::background_frontmost::frontmost_pid;
 use crate::input::background_layers::BackgroundLayers;
 use crate::input::prepared_event::PreparedEvent;
 use crate::input::skylight;
 
-/// Pause after the focus record so the target processes it before the
-/// input events arrive (background-computer-use waits 50 ms).
+/// Pause after each kind of window-server record (the focus record, the
+/// key-window pair) so the target processes it before the input events
+/// arrive (background-computer-use waits 50 ms).
 const ACTIVATION_SETTLE: Duration = Duration::from_millis(50);
 /// Settle time before the after-sample when the focus guard is off.
 const FOCUS_SETTLE: Duration = Duration::from_millis(100);
@@ -29,24 +30,27 @@ pub(crate) struct Prepared {
 }
 
 /// Everything [`run`] does to the outside world: the clock and frontmost
-/// reads of [`GuardIo`] plus the window-server record and the two posting
+/// reads of [`GuardIo`] plus the window-server records and the two posting
 /// paths. Production uses [`SystemDeliveryIo`]; tests script a fake so the
 /// ordering, fallback, and deadline behavior are observable without posting.
 pub(crate) trait DeliveryIo: GuardIo {
     /// Sends the target-only focus record; `Err` carries the degradation
     /// reason.
     fn focus_target_window(&mut self, pid: libc::pid_t, window_number: u32) -> Result<(), String>;
+    /// Sends the target-only key-window record pair, with the same
+    /// degradation contract as [`DeliveryIo::focus_target_window`].
+    fn make_key_window(&mut self, pid: libc::pid_t, window_number: u32) -> Result<(), String>;
     /// Posts through `SLEventPostToPid`; `false` means the symbol is missing
     /// and nothing was posted.
     fn post_skylight(&mut self, pid: libc::pid_t, event: &CGEvent) -> bool;
     fn post_to_pid(&mut self, pid: libc::pid_t, event: &CGEvent);
 }
 
-/// Posts a prepared delivery to one window's process.
+/// Posts a prepared pointer or keyboard delivery to one window's process.
 ///
-/// Order: sample the frontmost app, send the target-only focus record when
-/// the `activate` layer asks for it, post the events through exactly one
-/// path each, then let the focus guard watch for a steal.
+/// Order: sample the frontmost app, send the target-only window-server
+/// records the layers ask for (`activate`, then `keywindow`), post the events
+/// through exactly one path each, then let the focus guard watch for a steal.
 ///
 /// The deadline is checked before every event that starts something new (a
 /// move, a button or key down, a wheel chunk) and once more after the last
@@ -55,13 +59,14 @@ pub(crate) trait DeliveryIo: GuardIo {
 /// still fails. When the budget runs out the delivery stops there with
 /// `TIMEOUT`: not delivered (safe to retry) if no input event was posted yet,
 /// otherwise delivered-unverified (unsafe to retry) with the posted and
-/// planned event counts in the details. The focus record alone does not count
-/// as delivery: it changes no content and resending it is idempotent.
+/// planned event counts in the details. The window-server records alone do
+/// not count as delivery: they change no content and resending them is
+/// idempotent.
 pub(crate) fn run(
     prepared: Prepared,
     deadline: Deadline,
     io: &mut impl DeliveryIo,
-) -> Result<BackgroundPointerReport, AdapterError> {
+) -> Result<BackgroundDeliveryReport, AdapterError> {
     let Prepared {
         pid,
         window_number,
@@ -79,8 +84,11 @@ pub(crate) fn run(
         return Err(timeout(deadline, delivery, planned));
     }
 
-    if layers.activate {
-        match io.focus_target_window(pid, window_number) {
+    for record in [Record::Focus, Record::KeyWindow] {
+        if !record.enabled(layers) {
+            continue;
+        }
+        match record.send(io, pid, window_number) {
             Ok(()) => pause(io, budget_end, ACTIVATION_SETTLE),
             Err(reason) => degradations.push(reason),
         }
@@ -116,7 +124,7 @@ pub(crate) fn run(
     }
 
     let after = io.frontmost();
-    Ok(BackgroundPointerReport {
+    Ok(BackgroundDeliveryReport {
         frontmost_pid_before: before.and_then(to_process_id),
         frontmost_pid_after: after.and_then(to_process_id),
         layers: layers.names(),
@@ -140,6 +148,34 @@ pub(crate) fn window_number(window: &WindowInfo) -> Result<u32, AdapterError> {
 pub(crate) fn note_once(degradations: &mut Vec<String>, reason: &str) {
     if !degradations.iter().any(|existing| existing == reason) {
         degradations.push(reason.to_string());
+    }
+}
+
+/// The target-only window-server records, in sending order.
+#[derive(Clone, Copy)]
+enum Record {
+    Focus,
+    KeyWindow,
+}
+
+impl Record {
+    fn enabled(self, layers: BackgroundLayers) -> bool {
+        match self {
+            Self::Focus => layers.activate,
+            Self::KeyWindow => layers.key_window,
+        }
+    }
+
+    fn send(
+        self,
+        io: &mut impl DeliveryIo,
+        pid: libc::pid_t,
+        window_number: u32,
+    ) -> Result<(), String> {
+        match self {
+            Self::Focus => io.focus_target_window(pid, window_number),
+            Self::KeyWindow => io.make_key_window(pid, window_number),
+        }
     }
 }
 
@@ -259,6 +295,10 @@ impl GuardIo for SystemDeliveryIo {
 impl DeliveryIo for SystemDeliveryIo {
     fn focus_target_window(&mut self, pid: libc::pid_t, window_number: u32) -> Result<(), String> {
         focus_target_window(pid, window_number)
+    }
+
+    fn make_key_window(&mut self, pid: libc::pid_t, window_number: u32) -> Result<(), String> {
+        make_key_window(pid, window_number)
     }
 
     fn post_skylight(&mut self, pid: libc::pid_t, event: &CGEvent) -> bool {

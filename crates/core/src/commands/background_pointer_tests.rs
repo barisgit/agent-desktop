@@ -1,6 +1,6 @@
 use super::test_support::*;
 use super::*;
-use crate::{ProcessId, refs_test_support::HomeGuard};
+use crate::{DeliverySemantics, ProcessId, refs_test_support::HomeGuard};
 
 #[test]
 fn headed_context_is_rejected_before_any_delivery() {

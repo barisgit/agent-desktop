@@ -10,6 +10,7 @@ const WINDOW: u32 = 9555;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Sent {
     FocusRecord,
+    KeyWindowRecord,
     SkyLight(i64),
     PostToPid(i64),
 }
@@ -39,7 +40,7 @@ impl FakeIo {
     fn posts(&self) -> usize {
         self.sent
             .iter()
-            .filter(|sent| **sent != Sent::FocusRecord)
+            .filter(|sent| !matches!(sent, Sent::FocusRecord | Sent::KeyWindowRecord))
             .count()
     }
 
@@ -76,6 +77,12 @@ impl DeliveryIo for FakeIo {
         assert_eq!((pid, window_number), (TARGET, WINDOW));
         self.sent.push(Sent::FocusRecord);
         self.focus_record.clone()
+    }
+
+    fn make_key_window(&mut self, pid: libc::pid_t, window_number: u32) -> Result<(), String> {
+        assert_eq!((pid, window_number), (TARGET, WINDOW));
+        self.sent.push(Sent::KeyWindowRecord);
+        Ok(())
     }
 
     fn post_skylight(&mut self, pid: libc::pid_t, event: &CGEvent) -> bool {
@@ -215,6 +222,29 @@ fn the_focus_record_precedes_the_events_and_its_failure_only_degrades() {
 }
 
 #[test]
+fn the_key_window_pair_follows_the_focus_record_with_one_settle_each() {
+    let layers = BackgroundLayers {
+        activate: true,
+        key_window: true,
+        ..BackgroundLayers::default()
+    };
+    let mut io = FakeIo::new();
+
+    run(
+        prepared(layers, vec![event(1, false, 0)]),
+        deadline(1_000),
+        &mut io,
+    )
+    .unwrap();
+
+    assert_eq!(
+        io.sent,
+        [Sent::FocusRecord, Sent::KeyWindowRecord, Sent::PostToPid(1)]
+    );
+    assert_eq!(io.now, ACTIVATION_SETTLE * 2 + FOCUS_SETTLE);
+}
+
+#[test]
 fn a_deadline_that_expires_during_the_activation_settle_posts_nothing() {
     let layers = BackgroundLayers {
         activate: true,
@@ -331,7 +361,7 @@ fn repeated_degradations_are_reported_once() {
 #[test]
 fn guard_needs_a_known_frontmost_app() {
     let mut degradations = Vec::new();
-    let layers = BackgroundLayers::recommended();
+    let layers = BackgroundLayers::pointer_default();
 
     assert!(start_guard(layers, None, TARGET, &mut degradations).is_none());
     assert_eq!(degradations, ["guard:frontmost_unknown"]);

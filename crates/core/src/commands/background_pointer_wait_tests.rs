@@ -8,7 +8,7 @@ use crate::adapter::{
 use crate::context::WaitSelector;
 use crate::live_locator::{ObservationRequest, ObservedTree};
 use crate::refs_test_support::HomeGuard;
-use crate::{AccessibilityNode, ProcessId};
+use crate::{AccessibilityNode, AdapterError, ProcessId, RefEntry, WindowState};
 use std::sync::Mutex;
 
 const FRONTMOST_WINDOW_ID: &str = "w-1";
@@ -134,8 +134,8 @@ impl InputOps for FrontmostElsewhereAdapter {
         _window: &WindowInfo,
         _event: MouseEvent,
         _lease: &crate::InteractionLease,
-    ) -> Result<BackgroundPointerReport, AdapterError> {
-        Ok(BackgroundPointerReport::default())
+    ) -> Result<BackgroundDeliveryReport, AdapterError> {
+        Ok(BackgroundDeliveryReport::default())
     }
 }
 

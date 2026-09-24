@@ -15,14 +15,18 @@ use crate::cli_args::{
     drag::DragCliArgs,
     mouse_wheel::MouseWheelArgs,
 };
-use crate::dispatch::background_pointer;
 use crate::dispatch::parse::{parse_modifiers, parse_mouse_button, parse_xy, parse_xy_opt};
+use crate::dispatch::{background_keyboard, background_pointer};
 
 pub(super) fn press(
     args: PressArgs,
     adapter: &dyn PlatformAdapter,
     context: &CommandContext,
 ) -> Result<Value, AppError> {
+    if args.background {
+        return background_keyboard::press(args, adapter, context);
+    }
+    background_pointer::reject_window_id_without_background(args.window_id.as_deref())?;
     press_command::execute(
         press_command::PressArgs {
             combo: args.combo,

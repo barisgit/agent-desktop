@@ -1,7 +1,7 @@
 use super::*;
 use crate::adapter::{ActionOps, InputOps, NativeHandle, ObservationOps, SystemOps, WindowFilter};
 use crate::{
-    ProcessId, Rect, capability,
+    AdapterError, ProcessId, Rect, WindowState, capability,
     refs::{RefEntry, RefMap},
     refs_store::RefStore,
 };
@@ -34,7 +34,7 @@ pub(super) fn live_window(pid: u32) -> WindowInfo {
 pub(super) struct BackgroundCaptureAdapter {
     pub(super) live_pid: u32,
     pub(super) element_bounds: Rect,
-    pub(super) report: BackgroundPointerReport,
+    pub(super) report: BackgroundDeliveryReport,
     pub(super) expected_windows: Mutex<Vec<WindowInfo>>,
     pub(super) delivered: Mutex<Vec<(WindowInfo, MouseEvent)>>,
     pub(super) real_mouse_events: Mutex<u32>,
@@ -50,10 +50,10 @@ impl BackgroundCaptureAdapter {
                 width: 100.0,
                 height: 20.0,
             },
-            report: BackgroundPointerReport {
+            report: BackgroundDeliveryReport {
                 frontmost_pid_before: Some(ProcessId::new(7)),
                 frontmost_pid_after: Some(ProcessId::new(7)),
-                ..BackgroundPointerReport::default()
+                ..BackgroundDeliveryReport::default()
             },
             expected_windows: Mutex::new(Vec::new()),
             delivered: Mutex::new(Vec::new()),
@@ -109,7 +109,7 @@ impl InputOps for BackgroundCaptureAdapter {
         window: &WindowInfo,
         event: MouseEvent,
         _lease: &crate::InteractionLease,
-    ) -> Result<BackgroundPointerReport, AdapterError> {
+    ) -> Result<BackgroundDeliveryReport, AdapterError> {
         self.delivered.lock().unwrap().push((window.clone(), event));
         Ok(self.report.clone())
     }
