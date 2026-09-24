@@ -158,3 +158,34 @@ fn authenticating_a_built_key_event_is_safe_on_this_os() {
     let _ = crate::input::skylight::authenticate(&event, std::process::id() as libc::pid_t);
     assert_eq!(event_text(&event), "a");
 }
+
+/// `press enter --background` once typed no newline in VS Code while a typed
+/// `\n` did. The only construction difference was the Unicode string: the
+/// combo posted Return with none, so AppKit handed Chromium a key down with
+/// empty `characters`. Return and Tab combos now carry the same text as the
+/// typed character.
+#[test]
+fn return_and_tab_combos_build_the_same_events_as_typed_line_breaks_and_tabs() {
+    for (key, typed) in [("enter", "\n"), ("return", "\n"), ("tab", "\t")] {
+        let combo = plan(&BackgroundKeyInput::Combo(KeyCombo {
+            key: key.into(),
+            modifiers: Vec::new(),
+        }))
+        .unwrap();
+        let text = plan(&BackgroundKeyInput::Text(typed.into())).unwrap();
+
+        let shape = |keys: &[PlannedKey]| {
+            keys.iter()
+                .map(|planned| {
+                    (
+                        planned.key_code,
+                        planned.down,
+                        planned.flags,
+                        planned.text.clone(),
+                    )
+                })
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(shape(&combo), shape(&text), "{key}");
+    }
+}

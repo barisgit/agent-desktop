@@ -48,7 +48,27 @@ pub(crate) fn plan(input: &BackgroundKeyInput) -> Result<Vec<PlannedKey>, Adapte
 fn plan_combo(combo: &KeyCombo) -> Result<Vec<PlannedKey>, AdapterError> {
     let key_code = key_name_to_code(&combo.key)?;
     let flags = event_flags(&combo.modifiers);
-    Ok(key_pair(key_code, flags, Vec::new(), COMBO_HOLD, Duration::ZERO).to_vec())
+    Ok(key_pair(
+        key_code,
+        flags,
+        combo_text(key_code),
+        COMBO_HOLD,
+        Duration::ZERO,
+    )
+    .to_vec())
+}
+
+/// Return and Tab carry the same Unicode text as a typed line break or tab.
+/// Without it the combo reaches AppKit with empty `characters`, which a
+/// background VS Code ignored for Return while it honored a typed `\n`.
+/// Other keys keep an empty string so the target derives the characters
+/// from the key code and its own layout.
+fn combo_text(key_code: u16) -> Vec<u16> {
+    match key_code {
+        RETURN_KEY => vec![u16::from(b'\r')],
+        TAB_KEY => vec![u16::from(b'\t')],
+        _ => Vec::new(),
+    }
 }
 
 fn plan_text(text: &str) -> Vec<PlannedKey> {
