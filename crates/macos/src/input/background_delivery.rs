@@ -52,14 +52,14 @@ pub(crate) trait DeliveryIo: GuardIo {
 /// records the layers ask for (`activate`, then `keywindow`), post the events
 /// through exactly one path each, then let the focus guard watch for a steal.
 ///
-/// The deadline is checked before every event that starts something new (a
-/// move, a button or key down, a wheel chunk) and once more after the last
-/// event. An event that completes a press already posted is always sent, so
-/// nothing is left held down, but a delivery that finishes past the budget
-/// still fails. When the budget runs out the delivery stops there with
-/// `TIMEOUT`: not delivered (safe to retry) if no input event was posted yet,
-/// otherwise delivered-unverified (unsafe to retry) with the posted and
-/// planned event counts in the details. The window-server records alone do
+/// The deadline is checked before each window-server record, before every
+/// event that starts something new (a move, a button or key down, a wheel
+/// chunk), and once more after the last event. An event that completes a
+/// press already posted is always sent, so nothing is left held down, but a
+/// delivery that finishes past the budget still fails. When the budget runs
+/// out the delivery stops there with `TIMEOUT`: not delivered (safe to retry)
+/// if no input event was posted yet, otherwise delivered-unverified (unsafe
+/// to retry) with the posted and planned event counts in the details. The window-server records alone do
 /// not count as delivery: they change no content and resending them is
 /// idempotent.
 pub(crate) fn run(
@@ -80,13 +80,13 @@ pub(crate) fn run(
 
     let before = io.frontmost();
     let mut guard = start_guard(layers, before, pid, &mut degradations);
-    if expired(io, budget_end) {
-        return Err(timeout(deadline, delivery, planned));
-    }
 
     for record in [Record::Focus, Record::KeyWindow] {
         if !record.enabled(layers) {
             continue;
+        }
+        if expired(io, budget_end) {
+            return Err(timeout(deadline, delivery, planned));
         }
         match record.send(io, pid, window_number) {
             Ok(()) => pause(io, budget_end, ACTIVATION_SETTLE),
