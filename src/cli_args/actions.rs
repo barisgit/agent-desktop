@@ -168,7 +168,7 @@ pub(crate) struct PressArgs {
     pub force: bool,
     #[arg(
         long,
-        help = "Post the combo to the --window-id window's process without activating the app, taking keyboard focus, or matching menu items (macOS); conflicts with --headed and --app"
+        help = "Post the combo to the --window-id window's process without matching menu items (macOS); not activating the app or taking keyboard focus is best effort, reported as focus_change and focus_guard; conflicts with --headed and --app"
     )]
     #[serde(default)]
     pub background: bool,

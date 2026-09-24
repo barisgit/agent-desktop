@@ -36,8 +36,9 @@ pub trait InputOps: Send + Sync {
     }
 
     /// Posts `input` as key events to the process that owns `window`, aimed
-    /// at that window, without activating the app, moving the pointer, or
-    /// requiring a verified focused element.
+    /// at that window, without moving the pointer or requiring a verified
+    /// focused element. Keeping the app inactive and the user's keyboard
+    /// focus in place is best effort, not a guarantee.
     ///
     /// Callers must have re-verified `window` (pid, process instance, and
     /// exact window id) under `lease` and must never route app menu shortcuts
