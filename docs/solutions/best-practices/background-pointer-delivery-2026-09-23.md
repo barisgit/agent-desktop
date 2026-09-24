@@ -143,6 +143,11 @@ the semantic gate; it is a separate wheel path aimed at the element's center.
   see the pointer inside them.
 - **Signs.** `scroll --direction` uses the `mouse-wheel` convention: `down`
   is negative `dy`, `right` is negative `dx`.
+- **Deadline.** Every chunk is a separate event in the shared delivery loop,
+  so the deadline is checked before each one. A budget that runs out after
+  some chunks stops there with `TIMEOUT`, `delivered_unverified`, and
+  `details.delivered_events`/`planned_events`; a large delta (up to 100
+  chunks) can no longer run past the command or batch deadline.
 
 ## Risks
 

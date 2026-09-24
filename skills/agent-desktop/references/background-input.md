@@ -20,12 +20,25 @@ agent-desktop mouse-click --background --window-id w-9555 --xy 500,300
 agent-desktop mouse-move --background --window-id w-9555 --xy 500,300
 ```
 
-- **Target.** A ref hover takes the process, process instance, and exact window from the ref and aims at the element's live center. `--xy` has no identity of its own, so it requires `--window-id` (from `list-windows`); `--window-id` without `--background`, or alongside a ref, is `INVALID_ARGS`. Batch entries use `"background": true` and `"window_id"`.
+The [scroll wheel](#scroll-wheel-mouse-wheel-scroll) commands follow the same rules.
+
+- **Target.** A ref hover takes the process, process instance, and exact window from the ref and aims at the element's live center. Coordinates (`--xy`, or `mouse-wheel --x --y`) have no identity of their own, so they require `--window-id` (from `list-windows`); `--window-id` without `--background`, or alongside a ref, is `INVALID_ARGS`. Batch entries use `"background": true` and `"window_id"`.
 - **Geometry.** The point must lie inside the target window's bounds (`INVALID_ARGS`, `not_delivered` otherwise). The window may be offscreen, on another workspace, or covered: pid-targeted delivery skips the window server's hit test, so there is no occlusion check.
 - **Identity.** The window is re-verified against its pid and process instance under the interaction lease immediately before posting; a mismatch fails as `STALE_REF` with nothing delivered.
 - **`--wait-for`.** A post-action wait observes the target window (ref or `--window-id`), never the user's frontmost app.
 
 VS Code on a hidden workspace: `snapshot --app Code --window-id w-9555 -i`, then `hover <explorer-header-ref> --background`, re-snapshot, and `click <new-file-ref>` (semantic `AXPress`).
+
+## Scroll wheel: `mouse-wheel`, `scroll`
+
+```bash
+agent-desktop scroll @s8f3k2p9:e7 --background --direction down --amount 5
+agent-desktop mouse-wheel --background --window-id w-9555 --x 500 --y 300 --dy -5
+```
+
+- **Target.** `scroll <ref> --background` takes the window from the ref like a ref hover and aims at the element's live center. It skips the semantic AX scroll, so it also reaches views that advertise only `ScrollTo` (a web area inside a scroll area). `mouse-wheel` needs `--window-id`.
+- **Events.** Non-continuous line-unit wheel events (no phases or momentum), preceded by a `mouseMoved` at the point, in chunks of at most 10 lines. `scroll --direction` maps to `dy`/`dx` with the `mouse-wheel` signs (`down` is negative `dy`, `right` is negative `dx`).
+- **Result.** `{ scrolled: true, dy, dx }` plus `background`, as in [Result](#result). A partial scroll that runs out of time is a `TIMEOUT` with the counts described under [Deadline](#deadline-and-partial-delivery).
 
 ## Result
 
@@ -42,7 +55,7 @@ A repeated hover is harmless, but the contract still says `unsafe`: observe the 
 
 ## Deadline and partial delivery
 
-The command deadline, including an enclosing batch deadline, bounds the whole delivery. It is checked before every event that starts something new (a move or a button down). A button that is already down is always released. When the budget runs out, the command stops there and returns `TIMEOUT`:
+The command deadline, including an enclosing batch deadline, bounds the whole delivery. It is checked before every event that starts something new (a move, a button down, or a wheel chunk). A button that is already down is always released. When the budget runs out, the command stops there and returns `TIMEOUT`:
 
 - nothing posted yet: `not_delivered`, `retry: safe`;
 - some events posted: `delivered_unverified`, `retry: unsafe`, with `details.delivered_events` and `details.planned_events`. Snapshot before deciding what to do next.

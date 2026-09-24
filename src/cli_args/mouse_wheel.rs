@@ -45,7 +45,7 @@ pub(crate) struct MouseWheelArgs {
     pub modifiers: Vec<String>,
     #[arg(
         long,
-        help = "Post the wheel events to the target window's process without moving the real cursor, activating the app, or taking keyboard focus (macOS); conflicts with --headed"
+        help = "Opt-in, best-effort synthetic wheel events posted to the --window-id window's process (macOS, private SkyLight SPI): the real cursor stays put; focus preservation is best effort, see focus_change in the result; conflicts with --headed"
     )]
     #[serde(default)]
     pub background: bool,

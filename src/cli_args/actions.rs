@@ -133,7 +133,7 @@ pub(crate) struct ScrollArgs {
     pub timeout_ms: u64,
     #[arg(
         long,
-        help = "Post line scroll-wheel events at the element's center to its window's process instead of the semantic AX scroll; works on views that advertise only ScrollTo, never moves the real cursor or activates the app (macOS); conflicts with --headed"
+        help = "Opt-in, best-effort line scroll-wheel events posted at the element's center to its window's process (macOS, private SkyLight SPI) instead of the semantic AX scroll, so views that advertise only ScrollTo work too; the real cursor stays put; focus preservation is best effort, see focus_change in the result; conflicts with --headed"
     )]
     #[serde(default)]
     pub background: bool,

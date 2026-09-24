@@ -257,6 +257,29 @@ fn a_deadline_that_expires_between_click_pairs_stops_before_the_next_press() {
     assert!(details["timeout_ms"].is_u64());
 }
 
+/// A wheel chunk starts nothing that needs finishing, so a budget that runs
+/// out mid-scroll stops before the next chunk and reports what was posted.
+#[test]
+fn a_deadline_that_expires_between_wheel_chunks_stops_the_scroll() {
+    let mut io = FakeIo::new();
+    io.jump_after_post = Some((1, Duration::from_secs(10)));
+    let wheel = vec![
+        event(1, false, 0),
+        event(2, false, 10),
+        event(3, false, 10),
+        event(4, false, 0),
+    ];
+
+    let error = run(prepared(skylight_only(), wheel), deadline(1_000), &mut io).unwrap_err();
+
+    assert_eq!(io.sent, vec![Sent::SkyLight(1), Sent::SkyLight(2)]);
+    assert_eq!(error.code, ErrorCode::Timeout);
+    assert_eq!(error.disposition, DeliverySemantics::delivered_unverified());
+    let details = error.details.expect("timeout details");
+    assert_eq!(details["delivered_events"], 2);
+    assert_eq!(details["planned_events"], 4);
+}
+
 #[test]
 fn a_press_already_posted_is_released_even_after_the_deadline() {
     let mut io = FakeIo::new();
