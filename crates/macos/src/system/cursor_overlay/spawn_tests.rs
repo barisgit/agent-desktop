@@ -91,3 +91,31 @@ fn check_acknowledgement(phase: agent_desktop_core::CursorPhase, accepted: bool)
     let _ = std::fs::remove_file(path);
     result.unwrap();
 }
+
+#[test]
+fn previous_generation_renderer_is_retired_with_a_disable_it_can_decode() {
+    let path = std::path::PathBuf::from(format!("/tmp/cg-{}.sock", std::process::id()));
+    let _ = std::fs::remove_file(&path);
+    let listener = UnixListener::bind(&path).unwrap();
+    let receiver = thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        let mut payload = Vec::new();
+        stream.read_to_end(&mut payload).unwrap();
+        stream.write_all(&[1]).unwrap();
+        payload
+    });
+    let missing = std::path::PathBuf::from(format!("/tmp/cg-missing-{}.sock", std::process::id()));
+
+    retire(
+        [missing, path.clone()],
+        "run-upgrade",
+        Instant::now() + Duration::from_secs(1),
+    );
+
+    let payload = receiver.join().unwrap();
+    std::fs::remove_file(path).unwrap();
+    assert_eq!(
+        serde_json::from_slice::<serde_json::Value>(&payload).unwrap(),
+        serde_json::json!({ "action": "disable", "session_id": "run-upgrade" })
+    );
+}
