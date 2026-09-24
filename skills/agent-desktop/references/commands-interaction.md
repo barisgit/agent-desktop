@@ -143,7 +143,7 @@ Headless uses semantic context-menu actions. `--headed` performs a physical righ
 agent-desktop type @s8f3k2p9:e2 "hello@example.com"
 agent-desktop type @s8f3k2p9:e2 "multi line\ntext"
 ```
-Headless `type` uses `AXSelectedText` without focusing the app or synthesizing keys. Pass `--headed` to focus the target and synthesize keyboard input. Use `set-value` when direct semantic value assignment is the intended interaction. For editors that ignore `AXSelectedText` (VS Code, other Electron apps) in a window the user is not using, use `type <ref> <text> --background` ([background-input.md](background-input.md#keyboard-press-type)).
+Headless `type` uses `AXSelectedText` without focusing the app or synthesizing keys. Pass `--headed` to focus the target and synthesize keyboard input. Use `set-value` when direct semantic value assignment is the intended interaction. For editors that ignore `AXSelectedText` (VS Code, other Electron apps) in a window the user is not using, use `type <ref> <text> --background` or `type --background --window-id w-N <text>` ([background-input.md](background-input.md#keyboard-press-type)).
 
 When the value and selection are readable, insertion checks the resulting value. A mismatch or unavailable readback returns `ACTION_FAILED`; inspect the current state and delivery disposition before writing again. Secure-field redaction is the explicit exception described above: a delivered write remains unverified rather than failing solely because its value is hidden.
 
@@ -248,7 +248,7 @@ agent-desktop press cmd+a --app "TextEdit"
 | Flag | Description |
 |------|-------------|
 | `--app` | Target application; key delivery is PID-targeted, and `--headed` additionally focuses its exact window first |
-| `--background` | Post the combo to the `--window-id` window's process as key events only (no menu or AX mapping, no activation); conflicts with `--headed` and `--app` |
+| `--background` | Post the combo to the `--window-id` window's process as key events only (no menu or AX mapping, no deliberate activation; best effort); conflicts with `--headed` and `--app` |
 | `--window-id` | Exact target window for `--background` (from `list-windows`) |
 
 `press` reports `delivered_unverified`: delivery does not prove the shortcut produced the intended UI. Use the global CLI selector flags to wait for an expected accessible element in the requested app after sending the key once:

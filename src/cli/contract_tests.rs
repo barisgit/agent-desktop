@@ -9,6 +9,7 @@ const NON_COMMAND_MODULES: &[&str] = &[
     "background_keyboard_test_support",
     "background_pointer",
     "background_pointer_test_support",
+    "background_wait_test_support",
     "combo",
     "execute_by_ref",
     "find_live",

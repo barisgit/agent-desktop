@@ -22,6 +22,10 @@ fn press(argv: &[&str]) -> Commands {
     Commands::Press(PressArgs::try_parse_from(argv).unwrap())
 }
 
+fn type_text(argv: &[&str]) -> Commands {
+    Commands::Type(TypeArgs::try_parse_from(argv).unwrap())
+}
+
 #[test]
 fn background_press_posts_the_combo_to_the_named_window_only() {
     let _home = HomeGuard::new();
@@ -126,7 +130,9 @@ fn batch_background_keys_share_cli_routing_and_rejections() {
         commands_json: serde_json::json!([
             {"command": "press", "args": {"combo": "cmd+s", "background": true, "window_id": "w-9555"}},
             {"command": "press", "args": {"combo": "return", "background": true}},
-            {"command": "press", "args": {"combo": "return", "window_id": "w-9555"}}
+            {"command": "press", "args": {"combo": "return", "window_id": "w-9555"}},
+            {"command": "type", "args": {"text": "hi", "background": true, "window_id": "w-9555"}},
+            {"command": "type", "args": {"text": "hi", "background": true}}
         ])
         .to_string(),
         stop_on_error: false,
@@ -146,5 +152,62 @@ fn batch_background_keys_share_cli_routing_and_rejections() {
     assert_eq!(results[0]["data"]["pressed"], true);
     assert_eq!(results[1]["error"]["code"], "INVALID_ARGS");
     assert_eq!(results[2]["error"]["code"], "INVALID_ARGS");
-    assert_eq!(adapter.background_keys.lock().unwrap().len(), 1);
+    assert_eq!(results[3]["ok"], true, "{}", results[3]);
+    assert_eq!(results[3]["data"]["typed"], true);
+    assert_eq!(results[4]["error"]["code"], "INVALID_ARGS");
+    assert_eq!(adapter.background_keys.lock().unwrap().len(), 2);
+}
+
+#[test]
+fn background_type_with_a_window_id_types_into_that_window_without_a_ref() {
+    let _home = HomeGuard::new();
+    let (adapter, result) = run(
+        type_text(&[
+            "type",
+            "--background",
+            "--window-id",
+            BackgroundAdapter::WINDOW_ID,
+            "hello there",
+        ]),
+        false,
+    );
+
+    let value = result.unwrap();
+    assert_eq!(value["typed"], true);
+    assert!(value["background"].get("ax_focus").is_none());
+    let delivered = adapter.background_keys.lock().unwrap();
+    assert_eq!(delivered.len(), 1);
+    assert_eq!(delivered[0].0.id, BackgroundAdapter::WINDOW_ID);
+    assert!(matches!(&delivered[0].1, BackgroundKeyInput::Text(text) if text == "hello there"));
+}
+
+#[test]
+fn type_target_combinations_that_name_no_single_window_are_rejected() {
+    let _home = HomeGuard::new();
+    let cases: [&[&str]; 4] = [
+        &[
+            "type",
+            "@s1:e1",
+            "hi",
+            "--background",
+            "--window-id",
+            BackgroundAdapter::WINDOW_ID,
+        ],
+        &["type", "hi", "--background"],
+        &[
+            "type",
+            "@s1:e1",
+            "hi",
+            "--window-id",
+            BackgroundAdapter::WINDOW_ID,
+        ],
+        &["type", "hi"],
+    ];
+
+    for argv in cases {
+        let (adapter, result) = run(type_text(argv), false);
+
+        assert_eq!(result.unwrap_err().code(), "INVALID_ARGS", "{argv:?}");
+        assert!(adapter.background_keys.lock().unwrap().is_empty());
+    }
 }

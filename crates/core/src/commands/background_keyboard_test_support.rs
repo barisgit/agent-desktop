@@ -23,24 +23,41 @@ pub(super) fn live_window(pid: u32) -> WindowInfo {
     }
 }
 
-/// Records, in order, every accessibility action, background key delivery,
-/// and app-level key press so tests can prove which path a command took.
+/// What the element's window does with an accessibility focus request.
+pub(super) enum FocusBehavior {
+    /// Focus moves to the element and the read-back confirms it.
+    Moves,
+    /// The write is accepted but focus stays on another field, so the
+    /// read-back shows that field instead of the element.
+    StaysOnAnotherField,
+    /// The focus write itself fails.
+    Fails(ErrorCode),
+}
+
+/// Everything the adapter was asked to do, in order.
+#[derive(Default)]
+pub(super) struct Recorded {
+    pub(super) calls: Vec<String>,
+    pub(super) focus_policies: Vec<crate::InteractionPolicy>,
+    pub(super) delivered: Vec<(WindowInfo, BackgroundKeyInput)>,
+    pub(super) expected_windows: Vec<WindowInfo>,
+}
+
+/// Records every accessibility action, background key delivery, and
+/// app-level key press so tests can prove which path a command took.
 pub(super) struct KeyboardCaptureAdapter {
     pub(super) live_pid: u32,
-    pub(super) focus_error: Option<ErrorCode>,
+    pub(super) focus: FocusBehavior,
     pub(super) stale_ref: bool,
     pub(super) report: BackgroundDeliveryReport,
-    pub(super) calls: Mutex<Vec<String>>,
-    pub(super) focus_policies: Mutex<Vec<crate::InteractionPolicy>>,
-    pub(super) delivered: Mutex<Vec<(WindowInfo, BackgroundKeyInput)>>,
-    pub(super) expected_windows: Mutex<Vec<WindowInfo>>,
+    pub(super) recorded: Mutex<Recorded>,
 }
 
 impl KeyboardCaptureAdapter {
     pub(super) fn new() -> Self {
         Self {
             live_pid: PID,
-            focus_error: None,
+            focus: FocusBehavior::Moves,
             stale_ref: false,
             report: BackgroundDeliveryReport {
                 frontmost_pid_before: Some(ProcessId::new(7)),
@@ -48,19 +65,20 @@ impl KeyboardCaptureAdapter {
                 layers: vec!["route".into(), "skylight".into()],
                 ..BackgroundDeliveryReport::default()
             },
-            calls: Mutex::new(Vec::new()),
-            focus_policies: Mutex::new(Vec::new()),
-            delivered: Mutex::new(Vec::new()),
-            expected_windows: Mutex::new(Vec::new()),
+            recorded: Mutex::new(Recorded::default()),
         }
     }
 
     pub(super) fn calls(&self) -> Vec<String> {
-        self.calls.lock().unwrap().clone()
+        self.recorded.lock().unwrap().calls.clone()
     }
 
     pub(super) fn delivered(&self) -> Vec<(WindowInfo, BackgroundKeyInput)> {
-        self.delivered.lock().unwrap().clone()
+        self.recorded.lock().unwrap().delivered.clone()
+    }
+
+    fn call(&self, name: impl Into<String>) {
+        self.recorded.lock().unwrap().calls.push(name.into());
     }
 }
 
@@ -92,14 +110,20 @@ impl ActionOps for KeyboardCaptureAdapter {
         request: ActionRequest,
         _lease: &crate::InteractionLease,
     ) -> Result<ActionResult, AdapterError> {
-        self.calls
+        self.call(format!("action:{}", request.action.name()));
+        self.recorded
             .lock()
             .unwrap()
-            .push(format!("action:{}", request.action.name()));
-        self.focus_policies.lock().unwrap().push(request.policy);
-        match &self.focus_error {
-            Some(code) => Err(AdapterError::new(code.clone(), "AXFocused did not stick")),
-            None => Ok(ActionResult::delivered_unverified("focus")),
+            .focus_policies
+            .push(request.policy);
+        match &self.focus {
+            FocusBehavior::Moves => {
+                Ok(ActionResult::delivered_unverified("focus").with_verified_delivery())
+            }
+            FocusBehavior::StaysOnAnotherField => Ok(ActionResult::delivered_unverified("focus")),
+            FocusBehavior::Fails(code) => {
+                Err(AdapterError::new(code.clone(), "AXFocused did not stick"))
+            }
         }
     }
 }
@@ -111,10 +135,11 @@ impl InputOps for KeyboardCaptureAdapter {
         input: &BackgroundKeyInput,
         _lease: &crate::InteractionLease,
     ) -> Result<BackgroundDeliveryReport, AdapterError> {
-        self.calls.lock().unwrap().push("background_keys".into());
-        self.delivered
+        self.call("background_keys");
+        self.recorded
             .lock()
             .unwrap()
+            .delivered
             .push((window.clone(), input.clone()));
         Ok(self.report.clone())
     }
@@ -128,7 +153,11 @@ impl SystemOps for KeyboardCaptureAdapter {
         window: &WindowInfo,
         _deadline: crate::Deadline,
     ) -> Result<WindowInfo, AdapterError> {
-        self.expected_windows.lock().unwrap().push(window.clone());
+        self.recorded
+            .lock()
+            .unwrap()
+            .expected_windows
+            .push(window.clone());
         Ok(live_window(self.live_pid))
     }
 
@@ -143,7 +172,7 @@ impl SystemOps for KeyboardCaptureAdapter {
         _policy: crate::InteractionPolicy,
         _lease: &crate::InteractionLease,
     ) -> Result<ActionResult, AdapterError> {
-        self.calls.lock().unwrap().push("press_key_for_app".into());
+        self.call("press_key_for_app");
         Ok(ActionResult::delivered_unverified("press_key"))
     }
 }
@@ -194,6 +223,16 @@ pub(super) fn press_args(combo: &str, force: bool) -> BackgroundKeyboardArgs {
             combo: combo.into(),
             force,
         },
+        target: BackgroundKeyboardTarget::Window {
+            window_id: WINDOW_ID.into(),
+        },
+        timeout_ms: None,
+    }
+}
+
+pub(super) fn window_type_args(text: &str) -> BackgroundKeyboardArgs {
+    BackgroundKeyboardArgs {
+        input: BackgroundKeyboardInput::Type { text: text.into() },
         target: BackgroundKeyboardTarget::Window {
             window_id: WINDOW_ID.into(),
         },

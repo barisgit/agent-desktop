@@ -21,14 +21,18 @@ fn default_ref_timeout_ms() -> u64 {
     5000
 }
 
+/// `REF` may be omitted only for `type --background --window-id w-N TEXT`;
+/// `allow_missing_positional` lets the lone positional bind to `TEXT`.
 #[derive(Parser, Debug, Deserialize)]
+#[command(allow_missing_positional = true)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct TypeArgs {
     #[arg(
         value_name = "REF",
-        help = "Qualified ref from snapshot (@<snapshot_id>:eN), or legacy @eN with --snapshot"
+        help = "Qualified ref from snapshot (@<snapshot_id>:eN), or legacy @eN with --snapshot; omit only with --background --window-id"
     )]
-    pub ref_id: String,
+    #[serde(default)]
+    pub ref_id: Option<String>,
     #[arg(
         long,
         value_name = "SNAPSHOT_ID",
@@ -46,10 +50,17 @@ pub(crate) struct TypeArgs {
     pub timeout_ms: u64,
     #[arg(
         long,
-        help = "Post the text as Unicode key events to the ref's window process without activating the app or taking keyboard focus (macOS); conflicts with --headed"
+        help = "Opt-in, best-effort Unicode key events posted to the target window's process without activating the app (macOS, private SkyLight SPI); a ref must accept confirmed accessibility focus first; focus preservation is best effort; conflicts with --headed"
     )]
     #[serde(default)]
     pub background: bool,
+    #[arg(
+        long = "window-id",
+        value_name = "WINDOW_ID",
+        help = "Exact target window for --background without a ref (from list-windows, e.g. w-15592); keys reach that window's focused element"
+    )]
+    #[serde(default)]
+    pub window_id: Option<String>,
 }
 
 #[derive(Parser, Debug, Deserialize)]

@@ -32,14 +32,15 @@ VS Code on a hidden workspace: `snapshot --app Code --window-id w-9555 -i`, then
 ```bash
 agent-desktop press cmd+s --background --window-id w-15592
 agent-desktop type @s8f3k2p9:e7 "hello from background, 42!" --background
+agent-desktop type --background --window-id w-15592 "into the focused field"
 ```
 
-Key events go to the process that owns one exact window after target-only records make that window key inside its own process. The app is not activated and the cursor does not move.
+Key events go to the process that owns one exact window after target-only records make that window key inside its own process. The cursor does not move; the app is not activated on purpose, but as with the pointer, focus preservation is best effort.
 
-- **Target.** `press` requires `--window-id` and rejects `--app`. `type` takes the process and window from its ref and first tries an accessibility focus on the element; the outcome is reported in `background.ax_focus` (`set` or `failed` with a code) and never stops delivery. A stale ref is `STALE_REF` and nothing is sent. Batch entries use `"background": true` and `"window_id"`.
-- **Keys only.** Unlike headless `press`, no key is mapped to a menu item or accessibility action, and the focused element is never read. Text is sent one character at a time as Unicode key events (Return for line breaks, Tab for tabs), up to 10,000 bytes. Dangerous combos still need `--force`.
+- **Target.** `press` requires `--window-id` and rejects `--app`. `type <ref>` takes the process and window from its ref and fails closed on focus: the element gets an accessibility focus, and keys are sent only when that succeeds and a read-back confirms the element is focused (`background.ax_focus.status: "verified"`). Otherwise the command is `ACTION_FAILED` with nothing sent, because the keys would land in whatever field the window focused before. A stale ref is `STALE_REF`, also with nothing sent. `type --window-id w-N TEXT` (no ref) types into whatever that window has focused, like `press`. Batch entries use `"background": true` and `"window_id"`.
+- **Keys only.** Unlike headless `press`, no key is mapped to a menu item or accessibility action. Apart from the focus read-back of `type <ref>`, the focused element is never read. Text is sent one character at a time as Unicode key events (Return for line breaks, Tab for tabs), up to 10,000 bytes. Dangerous combos still need `--force`.
 - **Result.** Same as the pointer [result](#result). Confirm what was typed with `snapshot`; do not retry blindly, since a retry types the text again.
-- **Limits.** Keys reach the window's current first responder, so type into a ref (or click the field with `--background` first) rather than relying on where focus was left. The app may still resolve a Command combo to one of its own menu items.
+- **Limits.** Keys reach the window's current first responder. When `type <ref>` refuses because focus could not be confirmed (common in inactive Electron windows), click the field with `mouse-click --background`, then use `type --background --window-id`. The app may still resolve a Command combo to one of its own menu items.
 
 ## Result
 

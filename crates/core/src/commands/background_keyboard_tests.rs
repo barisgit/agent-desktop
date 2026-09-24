@@ -1,6 +1,6 @@
 use super::test_support::*;
 use super::*;
-use crate::{ErrorCode, Modifier, ProcessId, refs_test_support::HomeGuard};
+use crate::{DeliverySemantics, ErrorCode, Modifier, ProcessId, refs_test_support::HomeGuard};
 
 #[test]
 fn headed_context_is_rejected_before_any_delivery() {
@@ -38,7 +38,7 @@ fn window_press_posts_only_to_the_exact_window_and_never_uses_the_menu_path() {
     assert_eq!(combo.key, "s");
     assert!(matches!(combo.modifiers.as_slice(), [Modifier::Meta]));
 
-    let expected = adapter.expected_windows.lock().unwrap().clone();
+    let expected = adapter.recorded.lock().unwrap().expected_windows.clone();
     assert!(
         expected[0].title.is_empty(),
         "mutable titles must not pin identity"
@@ -94,7 +94,7 @@ fn ref_type_focuses_the_element_then_posts_text_to_the_ref_window() {
 
     assert_eq!(adapter.calls(), ["action:focus", "background_keys"]);
     assert_eq!(
-        *adapter.focus_policies.lock().unwrap(),
+        adapter.recorded.lock().unwrap().focus_policies,
         [crate::InteractionPolicy::headless()],
         "the focus attempt must never fall back to physical input"
     );
@@ -109,29 +109,80 @@ fn ref_type_focuses_the_element_then_posts_text_to_the_ref_window() {
 
     assert_eq!(value["typed"], true);
     assert_eq!(value["characters"], 26);
-    assert_eq!(value["background"]["ax_focus"]["status"], "set");
+    assert_eq!(value["background"]["ax_focus"]["status"], "verified");
     assert_eq!(value["disposition"]["delivery"], "delivered_unverified");
 }
 
+/// Two fields in one window: the ref names field A, but the app keeps focus
+/// on field B. Typing anyway would put the text into B, so nothing is sent.
 #[test]
-fn failed_accessibility_focus_does_not_gate_delivery() {
+fn ref_type_refuses_when_focus_stays_on_another_field() {
     let _guard = HomeGuard::new();
     let snapshot_id = ref_snapshot(Some(WINDOW_ID));
     let mut adapter = KeyboardCaptureAdapter::new();
-    adapter.focus_error = Some(ErrorCode::ActionFailed);
+    adapter.focus = FocusBehavior::StaysOnAnotherField;
+
+    let err = execute(
+        type_args("meant for field A", snapshot_id),
+        &adapter,
+        &CommandContext::default(),
+    )
+    .unwrap_err();
+
+    assert_eq!(adapter.calls(), ["action:focus"]);
+    assert_refused_before_posting(&err);
+}
+
+#[test]
+fn failed_accessibility_focus_refuses_delivery() {
+    let _guard = HomeGuard::new();
+    let snapshot_id = ref_snapshot(Some(WINDOW_ID));
+    let mut adapter = KeyboardCaptureAdapter::new();
+    adapter.focus = FocusBehavior::Fails(ErrorCode::ActionFailed);
+
+    let err = execute(
+        type_args("hello", snapshot_id),
+        &adapter,
+        &CommandContext::default(),
+    )
+    .unwrap_err();
+
+    assert!(adapter.delivered().is_empty());
+    assert_refused_before_posting(&err);
+}
+
+fn assert_refused_before_posting(err: &AppError) {
+    let AppError::Adapter(error) = err else {
+        panic!("expected an adapter error, got {err:?}");
+    };
+    assert_eq!(error.code, ErrorCode::ActionFailed);
+    assert_eq!(error.disposition, DeliverySemantics::not_delivered());
+    assert!(
+        error
+            .suggestion
+            .as_deref()
+            .is_some_and(|hint| hint.contains("--window-id")),
+        "the hint must point at the window-targeted fallback"
+    );
+}
+
+#[test]
+fn window_type_posts_text_to_the_window_without_any_focus_request() {
+    let adapter = KeyboardCaptureAdapter::new();
 
     let value = execute(
-        type_args("hello", snapshot_id),
+        window_type_args("into the focused field"),
         &adapter,
         &CommandContext::default(),
     )
     .unwrap();
 
-    assert_eq!(adapter.delivered().len(), 1);
-    let ax_focus = &value["background"]["ax_focus"];
-    assert_eq!(ax_focus["status"], "failed");
-    assert_eq!(ax_focus["code"], "ACTION_FAILED");
-    assert!(ax_focus["message"].is_string());
+    assert_eq!(adapter.calls(), ["background_keys"]);
+    let (window, input) = adapter.delivered().remove(0);
+    assert_eq!(window.id, WINDOW_ID);
+    assert!(matches!(input, BackgroundKeyInput::Text(text) if text == "into the focused field"));
+    assert_eq!(value["typed"], true);
+    assert!(value["background"].get("ax_focus").is_none());
 }
 
 #[test]
@@ -207,6 +258,17 @@ fn deadline_grows_with_the_text_so_pacing_is_never_clipped() {
 
     assert!(combo.remaining_ms() <= 1_000 + DELIVERY_BUDGET_MS + TEXT_BUDGET_PER_CHAR_MS);
     assert!(long.remaining_ms() > 1_000 + DELIVERY_BUDGET_MS + 399 * TEXT_BUDGET_PER_CHAR_MS - 500);
+}
+
+#[test]
+fn an_enclosing_batch_deadline_bounds_background_text() {
+    let batch = crate::Deadline::after(50).unwrap();
+    let _scope = crate::deadline::enter_scope(Some(batch));
+
+    let deadline =
+        delivery_deadline(Some(5_000), &BackgroundKeyInput::Text("x".repeat(400))).unwrap();
+
+    assert!(deadline.remaining_ms() <= 50);
 }
 
 #[test]

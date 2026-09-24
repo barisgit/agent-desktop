@@ -46,18 +46,37 @@ pub(super) fn press(
     )
 }
 
+/// `type --background` takes its window from a ref (and types only once
+/// focus on that element is confirmed) or from `--window-id` (and types into
+/// whatever that window has focused), never both.
 pub(super) fn type_text(
     args: TypeArgs,
     adapter: &dyn PlatformAdapter,
     context: &CommandContext,
 ) -> Result<Value, AppError> {
+    let target = match (args.ref_id, args.window_id) {
+        (Some(_), Some(_)) => {
+            return Err(AppError::invalid_input_with_suggestion(
+                "--window-id cannot be combined with a ref",
+                "A ref already identifies its exact window; drop --window-id, or drop the ref to type into the window's focused element.",
+            ));
+        }
+        (Some(ref_id), None) => BackgroundKeyboardTarget::Ref {
+            ref_id,
+            snapshot_id: args.snapshot,
+        },
+        (None, Some(window_id)) => BackgroundKeyboardTarget::Window { window_id },
+        (None, None) => {
+            return Err(AppError::invalid_input_with_suggestion(
+                "type --background requires a ref or --window-id",
+                "Pass the field's ref, or --window-id (from list-windows) to type into that window's focused element.",
+            ));
+        }
+    };
     execute(
         BackgroundKeyboardArgs {
             input: BackgroundKeyboardInput::Type { text: args.text },
-            target: BackgroundKeyboardTarget::Ref {
-                ref_id: args.ref_id,
-                snapshot_id: args.snapshot,
-            },
+            target,
             timeout_ms: helpers::normalize_action_timeout_ms(args.timeout_ms),
         },
         adapter,

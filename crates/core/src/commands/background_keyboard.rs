@@ -1,11 +1,12 @@
 use serde_json::{Value, json};
 
 use crate::{
-    AppError, BackgroundKeyInput, InteractionLease, RefEntry, WindowInfo,
+    AdapterError, AppError, BackgroundKeyInput, DeliverySemantics, ErrorCode, InteractionLease,
+    RefEntry, WindowInfo,
     action::Action,
     adapter::PlatformAdapter,
     commands::{
-        background_delivery::{self, ref_window},
+        background_delivery::{self, not_delivered, ref_window},
         combo::{ensure_combo_allowed, parse_combo_normalized},
         helpers, window_target,
     },
@@ -26,7 +27,8 @@ const TEXT_BUDGET_PER_CHAR_MS: u64 = 25;
 /// Which window receives the keys.
 pub enum BackgroundKeyboardTarget {
     /// A snapshot ref. The process and exact window come from the ref, and
-    /// the element is given accessibility focus before the keys are posted.
+    /// the keys are posted only once accessibility focus on the element is
+    /// confirmed.
     Ref {
         ref_id: String,
         snapshot_id: Option<String>,
@@ -50,15 +52,18 @@ pub struct BackgroundKeyboardArgs {
 /// Opt-in background keyboard delivery shared by `press` and `type` when they
 /// run with `--background`.
 ///
-/// Keys are posted to the process that owns one exact window, so the app is
-/// never activated, the pointer never moves, and the user's frontmost app
-/// keeps keyboard focus. Unlike the default `press --app` path this never
-/// matches app menu items and never requires the app to report a focused
-/// element: inactive Electron apps answer `AXFocusedUIElement` unreliably, so
-/// that check would refuse deliveries that land. A ref only adds a
-/// best-effort accessibility focus on its element. The app decides what the
-/// keys do, so success is `delivered_unverified` and the effect must be
-/// observed with a fresh snapshot.
+/// Keys are posted to the process that owns one exact window without
+/// activating the app or moving the pointer; keeping the user's frontmost
+/// app in front is best effort (see the focus guard in the report). Unlike
+/// the default `press --app` path this never matches app menu items.
+///
+/// A window target sends the keys to whatever that window has focused. A ref
+/// target fails closed: the element must accept accessibility focus and the
+/// read-back must confirm it, otherwise nothing is posted, because keys that
+/// land in another field of the same window are worse than no keys. The app
+/// decides what the keys do, so success is `delivered_unverified` and the
+/// effect must be observed with a fresh snapshot. `--wait-for` observes the
+/// target window, never the user's frontmost app.
 pub fn execute(
     args: BackgroundKeyboardArgs,
     adapter: &dyn PlatformAdapter,
@@ -73,7 +78,7 @@ pub fn execute(
     let (expected, entry) = resolve_target(args.target, adapter, context)?;
     let window = window_target::revalidate_window_for_mutation(adapter, &expected, &lease)?;
     let ax_focus = match &entry {
-        Some(entry) => Some(focus_ref(entry, adapter, context, &lease)?),
+        Some(entry) => Some(confirm_ref_focus(entry, adapter, context, &lease)?),
         None => None,
     };
     let report = adapter.background_key_input(&window, &input, &lease)?;
@@ -83,7 +88,13 @@ pub fn execute(
     if let Some(ax_focus) = ax_focus {
         response["background"]["ax_focus"] = ax_focus;
     }
-    helpers::apply_post_action_wait(response, entry.as_ref(), adapter, context)
+    helpers::apply_scoped_post_action_wait(
+        response,
+        Some(window.app.clone()),
+        Some(window.id.clone()),
+        adapter,
+        context,
+    )
 }
 
 /// Validates the input before anything is resolved or posted and returns it
@@ -151,27 +162,41 @@ fn resolve_target(
     }
 }
 
-/// Resolving the ref is a gate: a stale ref means the target changed, and
-/// typing into whatever the window focuses now could hit the wrong field.
-/// Accessibility focus itself is best effort, because Chromium-based apps
-/// often reject or fail to confirm `AXFocused` on inactive windows while
-/// still delivering keys to the focused DOM element.
-fn focus_ref(
+/// Resolving the ref is a gate: a stale ref means the target changed. So is
+/// focus: the element must accept `AXFocused` and the adapter's read-back
+/// (the element's own `AXFocused` or the app's `AXFocusedUIElement`) must
+/// confirm it. An unconfirmed focus means the keys would reach whatever the
+/// window focused before, possibly a different field, so nothing is posted.
+fn confirm_ref_focus(
     entry: &RefEntry,
     adapter: &dyn PlatformAdapter,
     context: &CommandContext,
     lease: &InteractionLease,
 ) -> Result<Value, AppError> {
     let handle = helpers::resolve_handle_within_deadline(adapter, entry, lease.deadline())?;
-    let focused = adapter.execute_action(&handle, context.request_base(Action::SetFocus), lease);
-    Ok(match focused {
-        Ok(_) => json!({ "status": "set" }),
-        Err(error) => json!({
-            "status": "failed",
-            "code": error.code,
-            "message": error.message,
-        }),
-    })
+    match adapter.execute_action(&handle, context.request_base(Action::SetFocus), lease) {
+        Ok(result) if result.disposition() == DeliverySemantics::delivered_verified() => {
+            Ok(json!({ "status": "verified" }))
+        }
+        Ok(_) => Err(focus_unconfirmed(
+            "focus was requested but the read-back did not show the element focused",
+        )
+        .into()),
+        Err(error) => {
+            Err(focus_unconfirmed(format!("{}: {}", error.code.as_str(), error.message)).into())
+        }
+    }
+}
+
+fn focus_unconfirmed(detail: impl Into<String>) -> AdapterError {
+    not_delivered(
+        ErrorCode::ActionFailed,
+        "Could not confirm accessibility focus on the ref's element, so no keys were sent",
+    )
+    .with_suggestion(
+        "Click the field with mouse-click --background, then run type --background --window-id <window> to type into the window's focused element; or snapshot again and retry with a fresh ref.",
+    )
+    .with_platform_detail(detail)
 }
 
 #[cfg(test)]
@@ -181,3 +206,7 @@ mod test_support;
 #[cfg(test)]
 #[path = "background_keyboard_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "background_keyboard_wait_tests.rs"]
+mod wait_tests;

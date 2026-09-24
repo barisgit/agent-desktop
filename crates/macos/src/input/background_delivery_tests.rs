@@ -350,6 +350,31 @@ fn a_move_that_overruns_the_deadline_times_out_as_delivered() {
     assert_eq!(details["planned_events"], 1);
 }
 
+/// Typed text is a run of key down/up pairs. When the budget runs out after
+/// a key down, its key up still goes out, and the next key down does not.
+#[test]
+fn typed_text_releases_the_held_key_and_stops_before_the_next_key_down() {
+    let typed = vec![
+        event(1, false, 8),
+        event(2, true, 16),
+        event(3, false, 8),
+        event(4, true, 16),
+        event(5, false, 8),
+        event(6, true, 16),
+    ];
+    let mut io = FakeIo::new();
+    io.jump_after_post = Some((2, Duration::from_millis(500)));
+
+    let error = run(prepared(skylight_only(), typed), deadline(100), &mut io).unwrap_err();
+
+    assert_eq!(io.sent, (1..=4).map(Sent::SkyLight).collect::<Vec<_>>());
+    assert_eq!(error.code, ErrorCode::Timeout);
+    assert_eq!(error.disposition, DeliverySemantics::delivered_unverified());
+    let details = error.details.expect("partial delivery details");
+    assert_eq!(details["delivered_events"], 4);
+    assert_eq!(details["planned_events"], 6);
+}
+
 #[test]
 fn repeated_degradations_are_reported_once() {
     let mut degradations = Vec::new();
