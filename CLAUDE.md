@@ -43,7 +43,6 @@ Computer-use tool (CLI + C library) letting AI agents observe and operate deskto
 
 ## Git & Commits
 
-- All commits are authored by **Lahfir**
 - NEVER add `Co-Authored-By` lines, AI attribution badges, or "Generated with" footers
 - NEVER include co-committers of any kind
 - **Conventional Commits required.** Every commit message must use a type prefix:
