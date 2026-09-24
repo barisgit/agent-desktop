@@ -148,12 +148,17 @@ fn pause(io: &mut impl DeliveryIo, budget_end: Duration, duration: Duration) {
     io.sleep(duration.min(remaining));
 }
 
+/// Adds the event counts to the deadline's own details (`kind`,
+/// `timeout_ms`, `elapsed_ms`) instead of replacing them.
 fn timeout(deadline: Deadline, delivery: DeliveryTracker, planned: usize) -> AdapterError {
-    let error = deadline.timeout_error().with_details(serde_json::json!({
-        "delivered_events": delivery.delivered_units(),
-        "planned_events": planned,
-    }));
-    delivery.annotate(error)
+    let mut error = deadline.timeout_error();
+    let mut details = error
+        .details
+        .take()
+        .unwrap_or_else(|| serde_json::json!({}));
+    details["delivered_events"] = delivery.delivered_units().into();
+    details["planned_events"] = planned.into();
+    delivery.annotate(error.with_details(details))
 }
 
 /// Posts through exactly one path: SkyLight when requested and available,

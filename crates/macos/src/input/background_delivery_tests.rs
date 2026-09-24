@@ -250,6 +250,11 @@ fn a_deadline_that_expires_between_click_pairs_stops_before_the_next_press() {
     let details = error.details.expect("timeout details");
     assert_eq!(details["delivered_events"], 3);
     assert_eq!(details["planned_events"], 5);
+    assert_eq!(
+        details["kind"], "deadline",
+        "the deadline's own details survive"
+    );
+    assert!(details["timeout_ms"].is_u64());
 }
 
 #[test]
