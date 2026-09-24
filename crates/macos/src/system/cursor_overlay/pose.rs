@@ -4,7 +4,7 @@ use agent_desktop_core::{
 use std::time::{Duration, Instant};
 
 /// Time the latest targeted action's cue stays fully visible.
-pub(super) const TARGET_POSE_IDLE_MS: u64 = 8_000;
+pub(super) const TARGET_POSE_IDLE_MS: u64 = 5_000;
 
 /// Time the cue then takes to fade linearly to nothing before it is cleared.
 pub(super) const TARGET_POSE_FADE_MS: u64 = 1_000;

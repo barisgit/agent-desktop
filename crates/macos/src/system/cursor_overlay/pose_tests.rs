@@ -41,8 +41,8 @@ fn enable_and_non_target_controls_do_not_select_an_instruction_to_render() {
 }
 
 #[test]
-fn target_pose_stays_fully_visible_for_eight_seconds() {
-    assert_eq!(TARGET_POSE_IDLE_MS, 8_000);
+fn target_pose_stays_fully_visible_for_five_seconds() {
+    assert_eq!(TARGET_POSE_IDLE_MS, 5_000);
     let now = Instant::now();
     let mut state = OverlayState::default();
     state.record_target_pose(now);

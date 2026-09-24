@@ -227,7 +227,7 @@ The style command is optional and saves settings for the next presentation witho
 - The cursor travels a human path in 90–320 ms. It never rotates or resizes.
 - The action waits up to 900 ms for cursor arrival confirmation. If the renderer does not confirm in time, a warning is reported and the action proceeds.
 - A click plays a ripple, then flashes an accent outline around the element for 0.9 s. Both draw below the cursor.
-- It stays fully visible for 8 s after the last targeted action, then fades out over about 1 s. The next targeted action brings it back.
+- It stays fully visible for 5 s after the last targeted action, then fades out over about 1 s. The next targeted action brings it back.
 - `cursor-overlay disable` removes it now. You do not have to end the session.
 - Headed actions retain it. It never moves or intercepts the OS pointer.
 - Overhead is about 150–300 ms per action, all of it the visible travel.
