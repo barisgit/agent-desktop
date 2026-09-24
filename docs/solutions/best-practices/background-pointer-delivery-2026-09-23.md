@@ -63,8 +63,8 @@ deliberately not a CLI flag. Unset or empty means the recommended set
 `route,skylight,activate,guard`; `none` means the bare 7f6e4f53 path; any
 other value is a comma-separated subset of `route`, `skylight`, `activate`,
 `guard`, `primer` (an unknown name is `INVALID_ARGS`, not delivered). The
-result lists the layers that ran in `data.background.layers` and any layer
-that could not run in `data.background.degraded`.
+result lists the requested layers in `data.background.layers` and any
+requested layer that was unavailable or failed in `data.background.degraded`.
 
 Always set: click state (field 1) and `kCGMouseEventWindowUnderMousePointer`
 (91) plus `...ThatCanHandleThisEvent` (92) set to the CG window number, with
@@ -91,12 +91,14 @@ fields 28/29 instead; those are the wrong fields.
    ever sent to the user's app (cua and yabai send one; that is what steals
    focus).
 4. **guard.** Samples the frontmost app before delivery, after every posted
-   event, and every 25 ms for 400 ms afterwards. If another app is frontmost,
-   it restores the **user's** app with
+   event, and every 25 ms for 400 ms afterwards. Only the **target** taking
+   the front counts as a steal: then it restores the **user's** app with
    `_SLPSSetFrontProcessWithOptions(userPSN, 0, kCPSNoWindows)`, at most three
-   times. It reports `data.background.focus_guard { interventions, restored,
-   max_steal_ms }`; `focus_change` becomes `restored` with a warning when the
-   front moved and came back, and `changed` with a warning when it did not.
+   times. When any third app becomes frontmost, the guard assumes the user
+   switched apps, stops watching, and never switches back. It reports
+   `data.background.focus_guard { interventions, restored, max_steal_ms,
+   yielded }`; `focus_change` becomes `restored` with a warning when the front
+   moved and came back, and `changed` with a warning when it did not.
    Per-pid event taps (Warp) were not added: they need a run-loop thread and
    teardown on every path, which the guard's polling avoids.
 5. **primer (off by default).** Before the real click, a left down/up at
@@ -130,6 +132,16 @@ the command.
   the user can see a flicker and keystrokes typed in that window may go to the
   target.
 
+## Deadline
+
+The command deadline (including an enclosing batch deadline) is checked
+before every event that starts something new: a move or a button down. A
+button-up for a down already posted is always sent, so nothing stays pressed.
+When the budget runs out the delivery stops with `TIMEOUT`: `not_delivered`
+if no input event was posted yet (the focus record alone is idempotent), and
+otherwise `delivered_unverified` / `retry: unsafe` with
+`details.delivered_events` and `details.planned_events`.
+
 ## Known limits
 
 - **Chromium/Electron.** `RenderWidgetHostViewCocoa` drops `mouseMoved`
@@ -150,7 +162,13 @@ window-local conversion with negative origins, event plans (move-first,
 primer placement, click states), guard decisions with a scripted clock and
 frontmost sequence, the frontmost fallback chain, window derivation from refs,
 bounds rejection, disposition and focus reporting, CLI/batch parsing
-(including negative coordinates), and dispatch routing. None of them post an
-event. Live behavior must be checked by observation, one layer set at a time:
+(including negative coordinates), and dispatch routing. The delivery loop runs
+against a scripted transport and clock (`background_delivery_tests.rs`):
+SkyLight-to-`CGEventPostToPid` fallback, one posting path per event, focus
+record ordering, and deadline expiry after activation, between click pairs,
+and right after a button down. None of them post a real event.
+`tests/e2e/scenarios/background.sh` clicks a fixture button with
+`mouse-click --background` and checks the frontmost app and cursor position.
+Live behavior must otherwise be checked by observation, one layer set at a time:
 snapshot before, the `--background` command, snapshot after, and confirm the
 frontmost app and cursor position are unchanged.

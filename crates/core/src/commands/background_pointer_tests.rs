@@ -191,6 +191,28 @@ fn frontmost_change_is_reported_with_a_warning() {
 }
 
 #[test]
+fn a_user_switch_the_guard_yielded_to_is_not_blamed_on_the_target() {
+    let mut adapter = BackgroundCaptureAdapter::new();
+    adapter.report.frontmost_pid_after = Some(ProcessId::new(9));
+    adapter.report.focus_guard = Some(crate::BackgroundFocusGuard {
+        yielded: true,
+        ..crate::BackgroundFocusGuard::default()
+    });
+
+    let value = execute(
+        point_args(left_click(1), -2500.0, 300.0),
+        &adapter,
+        &CommandContext::default(),
+    )
+    .unwrap();
+
+    assert_eq!(value["background"]["focus_change"], "changed");
+    assert_eq!(value["background"]["focus_guard"]["yielded"], true);
+    let warning = value["warning"].as_str().unwrap();
+    assert!(warning.contains("left it alone"), "{warning}");
+}
+
+#[test]
 fn guarded_steal_reports_layers_degradations_and_guard_evidence() {
     let mut adapter = BackgroundCaptureAdapter::new();
     adapter.report.layers = vec!["route".into(), "guard".into()];
@@ -199,6 +221,7 @@ fn guarded_steal_reports_layers_degradations_and_guard_evidence() {
         interventions: 1,
         restored: true,
         max_steal_ms: 42,
+        yielded: false,
     });
 
     let value = execute(

@@ -9,7 +9,7 @@ Ref-based actions run in two modes, Playwright-style:
 - **Headless (default).** Semantic accessibility operations only. The action never silently steals focus, moves the cursor, synthesizes keyboard input, or uses the pasteboard. When the semantic path cannot perform the action it fails closed.
 - **`--headed`.** A global flag (`agent-desktop --headed click @s8f3k2p9:e5`) that authorizes the action's core-owned preconditions. Ref actions that need keyboard delivery focus the exact source window; pointer actions focus that window and require a verified target point before the adapter runs. On macOS, `click`, `right-click`, `type`, `clear`, and `scroll` are physical-first; `double-click`, `triple-click`, `hover`, and `drag` are physical-only. `expand`, `collapse`, `set-value`, `select`, `toggle`, `check`, `uncheck`, `focus`, and `scroll-to` stay semantic.
 
-`press` is explicit physical keyboard input. `hover`, `drag`, `mouse-move`, `mouse-click`, and `mouse-wheel` are explicit physical cursor input and require `--headed`, except that `hover`, `mouse-move`, and `mouse-click` also accept `--background` (see [Background pointer](#background-pointer---background)), which posts to one exact window without moving the cursor. Raw coordinates carry no window identity, so they never focus an app. The held-input names (`key-down`, `key-up`, `mouse-down`, `mouse-up`) are reserved and return `ACTION_NOT_SUPPORTED` until a stateful daemon can own the hold lifetime.
+`press` is explicit physical keyboard input. `hover`, `drag`, `mouse-move`, `mouse-click`, and `mouse-wheel` are explicit physical cursor input and require `--headed`, except that `hover`, `mouse-move`, and `mouse-click` also accept the opt-in, best-effort `--background` mode (see [background-input.md](background-input.md)), which posts synthetic events to one exact window without moving the cursor. Raw coordinates carry no window identity, so they never focus an app. The held-input names (`key-down`, `key-up`, `mouse-down`, `mouse-up`) are reserved and return `ACTION_NOT_SUPPORTED` until a stateful daemon can own the hold lifetime.
 
 `--headed` is a global flag and also applies to every `batch` entry.
 
@@ -291,20 +291,7 @@ With `--headed`, a ref-addressed hover must focus the target's exact window befo
 
 #### Background pointer (`--background`)
 
-```bash
-agent-desktop hover @s8f3k2p9:e5 --background
-agent-desktop hover --background --window-id w-9555 --xy 500,300
-```
-
-`--background` (macOS only; `hover`, `mouse-move`, `mouse-click`) posts the pointer event directly to the process that owns one exact window. The user's cursor never moves, the app is not raised, and the user's frontmost app keeps focus (a focus guard restores it if the target activates itself), so it works in the default headless mode and is rejected with `--headed`.
-
-- **Target.** A ref hover takes the process, process instance, and exact window from the ref and aims at the element's live center. `--xy` has no identity of its own, so it requires `--window-id` (from `list-windows`); `--window-id` without `--background`, or alongside a ref, is `INVALID_ARGS`. Batch entries use `"background": true` and `"window_id"`.
-- **Geometry.** The point must lie inside the target window's bounds (`INVALID_ARGS`, `not_delivered` otherwise). The window may be offscreen, on another workspace, or covered: pid-targeted delivery skips the window server's hit test, so there is no occlusion check.
-- **Identity.** The window is re-verified against its pid and process instance under the interaction lease immediately before posting; a mismatch fails as `STALE_REF` with nothing delivered.
-- **Result.** Success carries `disposition: { delivery: "delivered_unverified", retry: "unsafe" }` and `background: { pid, window_id, focus_change, layers, frontmost_pid_before?, frontmost_pid_after?, degraded?, focus_guard? }`. `focus_change` is `unchanged`, `restored` (the target briefly took the front and it came back; top-level `warning`), `changed` (not restored; `warning`), or `unknown`. `layers` lists the macOS delivery techniques that ran, `degraded` any that were unavailable, and `focus_guard` is `{ interventions, restored, max_steal_ms }`. A repeated hover is harmless, but the contract still says `unsafe`: observe the effect with `snapshot` instead of retrying.
-- **Limits.** The app decides what to do with the event. Sandboxed or hardened apps may drop it; Chromium/Electron honors a background `mouseMoved` only while the window is still its app's main window and may swallow a first click in an inactive window. The cursor overlay is not shown. Keystrokes are out of scope because macOS routes them to the key window.
-
-VS Code on a hidden workspace: `snapshot --app Code --window-id w-9555 -i`, then `hover <explorer-header-ref> --background`, re-snapshot, and `click <new-file-ref>` (semantic `AXPress`).
+`hover`, `mouse-move`, and `mouse-click` accept `--background` (macOS only), an explicit opt-in, best-effort mode that posts synthetic events to one exact window's process. The real cursor stays put; focus preservation is best effort. Targeting, results, deadlines, and limits are in [background-input.md](background-input.md).
 
 ### drag
 ```bash
@@ -352,10 +339,10 @@ agent-desktop --headed mouse-click --xy 500,300 --count 2
 | `--button` | left | `left`, `right`, `middle` |
 | `--count` | 1 | Number of clicks |
 | `--modifiers` | | Held modifiers: `shift`, `meta`, `ctrl`, `alt` (repeatable; `cmd`/`command` aliases are accepted); held during the click |
-| `--background` | off | Post to the window named by `--window-id` without moving the cursor or activating the app; conflicts with `--headed` |
+| `--background` | off | Opt-in, best-effort synthetic input to the window named by `--window-id`; the cursor stays put, focus preservation is best effort; conflicts with `--headed` ([background-input.md](background-input.md)) |
 | `--window-id` | | Exact target window for `--background` (from `list-windows`); the point must lie inside it |
 
-`agent-desktop mouse-click --background --window-id w-9555 --xy 500,300` and `agent-desktop mouse-move --background --window-id w-9555 --xy 500,300` follow the [background pointer](#background-pointer---background) rules.
+`agent-desktop mouse-click --background --window-id w-9555 --xy 500,300` and `agent-desktop mouse-move --background --window-id w-9555 --xy 500,300` follow the [background input](background-input.md) rules.
 
 ### mouse-down / mouse-up
 

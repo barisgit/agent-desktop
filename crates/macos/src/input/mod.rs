@@ -2,6 +2,8 @@ mod adapter;
 #[cfg(target_os = "macos")]
 mod background_activation;
 #[cfg(target_os = "macos")]
+mod background_delivery;
+#[cfg(target_os = "macos")]
 mod background_events;
 #[cfg(target_os = "macos")]
 mod background_focus_guard;
@@ -27,5 +29,7 @@ mod mouse_drag_state;
 pub(crate) mod mouse_move;
 pub(crate) mod mouse_scroll;
 mod owned_object;
+#[cfg(target_os = "macos")]
+mod prepared_event;
 #[cfg(target_os = "macos")]
 mod skylight;

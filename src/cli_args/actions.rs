@@ -201,7 +201,7 @@ pub(crate) struct HoverArgs {
     pub timeout_ms: u64,
     #[arg(
         long,
-        help = "Post the event to the target window's process without moving the real cursor, activating the app, or taking keyboard focus (macOS); conflicts with --headed"
+        help = "Opt-in, best-effort synthetic input posted to the target window's process (macOS, private SkyLight SPI): the real cursor stays put; focus preservation is best effort, see focus_change in the result; conflicts with --headed"
     )]
     #[serde(default)]
     pub background: bool,
@@ -225,7 +225,7 @@ pub(crate) struct MouseMoveArgs {
     pub xy: String,
     #[arg(
         long,
-        help = "Post the event to the target window's process without moving the real cursor, activating the app, or taking keyboard focus (macOS); conflicts with --headed"
+        help = "Opt-in, best-effort synthetic input posted to the target window's process (macOS, private SkyLight SPI): the real cursor stays put; focus preservation is best effort, see focus_change in the result; conflicts with --headed"
     )]
     #[serde(default)]
     pub background: bool,
@@ -266,7 +266,7 @@ pub(crate) struct MouseClickArgs {
     pub modifiers: Vec<String>,
     #[arg(
         long,
-        help = "Post the event to the target window's process without moving the real cursor, activating the app, or taking keyboard focus (macOS); conflicts with --headed"
+        help = "Opt-in, best-effort synthetic input posted to the target window's process (macOS, private SkyLight SPI): the real cursor stays put; focus preservation is best effort, see focus_change in the result; conflicts with --headed"
     )]
     #[serde(default)]
     pub background: bool,

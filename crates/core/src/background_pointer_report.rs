@@ -2,12 +2,12 @@ use crate::{BackgroundFocusGuard, ProcessId};
 
 /// Evidence an adapter gathers around one background pointer delivery.
 ///
-/// Background delivery promises not to activate the target, but the target
+/// Background delivery tries not to activate the target, but the target
 /// process decides for itself how to react to posted events, so the command
 /// reports what it observed instead of claiming a silent success. A `None`
 /// frontmost sample means the frontmost application could not be read.
-/// `layers` names the platform delivery techniques that ran and
-/// `degradations` explains any that were requested but unavailable.
+/// `layers` names the platform delivery techniques that were requested and
+/// `degradations` explains any of them that were unavailable or failed.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct BackgroundPointerReport {
     pub frontmost_pid_before: Option<ProcessId>,
@@ -52,6 +52,7 @@ mod tests {
                 interventions,
                 restored: interventions > 0 && before == after,
                 max_steal_ms: 0,
+                yielded: false,
             }),
             ..BackgroundPointerReport::default()
         }
@@ -72,6 +73,7 @@ mod tests {
             interventions: 0,
             restored: false,
             max_steal_ms: 25,
+            yielded: false,
         });
         assert_eq!(observed.focus_change(), "restored");
     }

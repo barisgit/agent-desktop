@@ -39,20 +39,23 @@ pub struct BackgroundPointerArgs {
 struct ResolvedTarget {
     window: WindowInfo,
     point: Point,
-    entry: Option<RefEntry>,
 }
 
 /// Opt-in background pointer delivery shared by `hover`, `mouse-move`, and
 /// `mouse-click` when they run with `--background`.
 ///
 /// The event is posted straight to the process that owns one exact window, so
-/// the user's real cursor never moves, the app is never activated or raised,
-/// and keyboard focus is left alone. Because the window server's hit test is
-/// bypassed, the target window may be offscreen or covered by other windows;
-/// the only geometric requirement is that the point lies inside the target
-/// window's bounds. The target process may still ignore the event or react to
-/// it by activating itself, so success is reported as `delivered_unverified`
-/// together with the frontmost application observed before and after.
+/// the user's real cursor never moves and the window is never raised. Keeping
+/// the user's frontmost app and keyboard focus is best effort: the target
+/// process may ignore the event or react to it by activating itself, so
+/// success is reported as `delivered_unverified` together with the frontmost
+/// application observed before and after. Because the window server's hit
+/// test is bypassed, the target window may be offscreen or covered by other
+/// windows; the only geometric requirement is that the point lies inside the
+/// target window's bounds.
+///
+/// `--wait-for` observes the target window, never the user's frontmost app,
+/// for both ref and coordinate targets.
 ///
 /// The cursor overlay is intentionally skipped: it would draw a cursor where
 /// the real cursor is not, over a window that may not even be visible.
@@ -83,7 +86,13 @@ pub fn execute(
     drop(lease);
 
     let response = response(&args.action, &target.point, &window, report);
-    helpers::apply_post_action_wait(response, target.entry.as_ref(), adapter, context)
+    helpers::apply_scoped_post_action_wait(
+        response,
+        Some(window.app.clone()),
+        Some(window.id.clone()),
+        adapter,
+        context,
+    )
 }
 
 fn resolve_target(
@@ -114,7 +123,6 @@ fn resolve_target(
                     x: bounds.x + bounds.width / 2.0,
                     y: bounds.y + bounds.height / 2.0,
                 },
-                entry: Some(entry),
             })
         }
         BackgroundPointerTarget::Point { x, y, window_id } => {
@@ -123,11 +131,7 @@ fn resolve_target(
             let mut window =
                 window_target::resolve_window_for_app(None, Some(&window_id), adapter)?;
             window.title.clear();
-            Ok(ResolvedTarget {
-                window,
-                point,
-                entry: None,
-            })
+            Ok(ResolvedTarget { window, point })
         }
     }
 }
@@ -264,7 +268,12 @@ fn response(
 
 fn focus_warning(focus_change: &str, guard: Option<crate::BackgroundFocusGuard>) -> Option<String> {
     let steal_ms = guard.map_or(0, |guard| guard.max_steal_ms);
+    let yielded = guard.is_some_and(|guard| guard.yielded);
     match focus_change {
+        "changed" if yielded => Some(
+            "Another application became frontmost during background delivery; the focus guard treated it as a deliberate switch and left it alone"
+                .to_string(),
+        ),
         "changed" => Some(
             "The frontmost application changed during background delivery and was not restored; the target may have activated itself"
                 .to_string(),
@@ -287,3 +296,7 @@ mod test_support;
 #[cfg(test)]
 #[path = "background_pointer_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "background_pointer_wait_tests.rs"]
+mod wait_tests;

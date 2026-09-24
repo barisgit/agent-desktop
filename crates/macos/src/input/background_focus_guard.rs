@@ -20,35 +20,46 @@ pub(crate) trait GuardIo {
     fn sleep(&mut self, duration: Duration);
 }
 
-/// Tracks whether the user's frontmost app was displaced during delivery.
+/// Tracks whether the delivery target displaced the user's frontmost app.
 ///
-/// Only the user's own app is ever restored; the guard never touches the
-/// target, so it cannot itself cause an activation.
+/// The guard only undoes a steal by the target itself: it restores the
+/// user's app when the target became frontmost, never touches the target,
+/// and gives up for good as soon as any third app becomes frontmost, because
+/// that is the user (or something else they started) switching apps, which
+/// the guard must not fight.
 #[derive(Debug)]
 pub(crate) struct FocusGuard {
     user_pid: i32,
+    target_pid: i32,
     steal_started: Option<Duration>,
     max_steal: Duration,
     interventions: u32,
+    yielded: bool,
 }
 
 impl FocusGuard {
-    pub(crate) fn new(user_pid: i32) -> Self {
+    pub(crate) fn new(user_pid: i32, target_pid: i32) -> Self {
         Self {
             user_pid,
+            target_pid,
             steal_started: None,
             max_steal: Duration::ZERO,
             interventions: 0,
+            yielded: false,
         }
     }
 
-    /// Takes one frontmost sample and restores the user's app if another app
-    /// holds the front. An unreadable sample is ignored rather than treated
-    /// as a steal.
+    /// Takes one frontmost sample. Only the target counts as a steal, and
+    /// only while it is not the user's own app. An unreadable sample is
+    /// ignored, and nothing is sampled once the guard has yielded.
     pub(crate) fn sample(&mut self, io: &mut impl GuardIo) {
+        if self.yielded {
+            return;
+        }
         let now = io.now();
         match io.frontmost() {
-            Some(pid) if pid != self.user_pid => {
+            Some(pid) if pid == self.user_pid => self.end_steal(now),
+            Some(pid) if pid == self.target_pid => {
                 let started = *self.steal_started.get_or_insert(now);
                 self.max_steal = self.max_steal.max(now.saturating_sub(started));
                 if self.interventions < MAX_INTERVENTIONS {
@@ -57,21 +68,21 @@ impl FocusGuard {
                 }
             }
             Some(_) => {
-                if let Some(started) = self.steal_started.take() {
-                    self.max_steal = self.max_steal.max(now.saturating_sub(started));
-                }
+                self.end_steal(now);
+                self.yielded = true;
             }
             None => {}
         }
     }
 
-    /// Samples every [`GUARD_POLL`] until `window` has elapsed.
+    /// Samples every [`GUARD_POLL`] until `window` has elapsed or the guard
+    /// yields to a third app.
     pub(crate) fn watch(&mut self, io: &mut impl GuardIo, window: Duration) {
         let until = io.now() + window;
         loop {
             self.sample(io);
             let now = io.now();
-            if now >= until {
+            if self.yielded || now >= until {
                 return;
             }
             io.sleep(GUARD_POLL.min(until - now));
@@ -85,6 +96,13 @@ impl FocusGuard {
             interventions: self.interventions,
             restored: self.interventions > 0 && final_frontmost == Some(self.user_pid),
             max_steal_ms: u64::try_from(self.max_steal.as_millis()).unwrap_or(u64::MAX),
+            yielded: self.yielded,
+        }
+    }
+
+    fn end_steal(&mut self, now: Duration) {
+        if let Some(started) = self.steal_started.take() {
+            self.max_steal = self.max_steal.max(now.saturating_sub(started));
         }
     }
 }

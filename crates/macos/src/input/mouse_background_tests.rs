@@ -46,22 +46,3 @@ fn failures_before_posting_are_reported_as_not_delivered() {
         );
     }
 }
-
-#[test]
-fn repeated_degradations_are_reported_once() {
-    let mut degradations = Vec::new();
-    note_once(&mut degradations, "skylight:SLEventPostToPid_unavailable");
-    note_once(&mut degradations, "skylight:SLEventPostToPid_unavailable");
-    assert_eq!(degradations, ["skylight:SLEventPostToPid_unavailable"]);
-}
-
-#[test]
-fn guard_needs_a_known_frontmost_app() {
-    let mut degradations = Vec::new();
-    let layers = BackgroundLayers::recommended();
-
-    assert!(start_guard(layers, None, &mut degradations).is_none());
-    assert_eq!(degradations, ["guard:frontmost_unknown"]);
-    assert!(start_guard(layers, Some(7), &mut degradations).is_some());
-    assert!(start_guard(BackgroundLayers::default(), Some(7), &mut degradations).is_none());
-}

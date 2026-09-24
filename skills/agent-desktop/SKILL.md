@@ -47,6 +47,7 @@ Detailed documentation is split into focused reference files. Read them as neede
 | `references/commands-system.md` | launch (including `--cdp` for Chromium web contents), close, windows, clipboard, wait, batch, session, status, permissions, version |
 | `references/workflows.md` | 17 common patterns: forms, menus, dialogs, scroll-find, drag-drop, async wait, anti-patterns |
 | `references/macos.md` | macOS permissions/TCC, AX API internals, smart activation chain, surfaces, Notification Center, troubleshooting |
+| `references/background-input.md` | opt-in, best-effort `--background` synthetic input (macOS): targets, result fields, deadlines, limits |
 
 ## The Observe-Act Loop (Progressive Skeleton Traversal)
 
@@ -193,11 +194,11 @@ agent-desktop --headed hover --xy 500,300       # Cursor to coordinates
 agent-desktop --headed drag --from @s8f3k2p9:e1 --to @s8f3k2p9:e5 # Drag between elements
 agent-desktop --headed mouse-click --xy 500,300 # Click at coordinates
 agent-desktop --headed mouse-move --xy 100,200  # Move cursor
-agent-desktop hover @s8f3k2p9:e5 --background   # Hover a background window; real cursor and focus untouched (macOS)
+agent-desktop hover @s8f3k2p9:e5 --background   # Opt-in synthetic hover in a background window; cursor stays put (macOS)
 agent-desktop mouse-click --background --window-id w-9555 --xy 500,300 # Click inside one exact background window
 ```
 
-`--background` (macOS; `hover`, `mouse-move`, `mouse-click`) posts the event straight to the process owning one exact window: the real cursor does not move, the app is not raised, and the user's frontmost app keeps focus (restored by a focus guard if the target grabs it). A ref hover derives the process and window from the ref; `--xy` needs `--window-id`, and the point must lie inside that window (it may be offscreen or covered). It cannot be combined with `--headed`. Success is `delivered_unverified` (`retry: unsafe`) with `data.background.focus_change` (`unchanged`, `restored`, `changed`, or `unknown`); the app may ignore the event, so confirm the effect with a fresh `snapshot`. Example: hover an Electron sidebar header with `--background`, re-snapshot, then `click` the revealed button by ref.
+`--background` (macOS; `hover`, `mouse-move`, `mouse-click`) is an explicit opt-in, best-effort synthetic-input mode: it posts the event to the process owning one exact window through private SkyLight SPI. The real cursor does not move and the window is not raised, but focus preservation is best effort: the target may activate itself, so read `data.background.focus_change` (`unchanged`, `restored`, `changed`, `unknown`) and `focus_guard`. A ref derives the process and window; `--xy` needs `--window-id` and a point inside that window (it may be offscreen or covered). It cannot be combined with `--headed`. Success is `delivered_unverified` (`retry: unsafe`); confirm the effect with a fresh `snapshot`. Details: [background-input.md](references/background-input.md).
 
 `key-down`, `key-up`, `mouse-down`, and `mouse-up` return `ACTION_NOT_SUPPORTED` until a stateful daemon can own held-input lifetime. Use `press`, `mouse-click`, or `drag` instead.
 
