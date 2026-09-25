@@ -500,7 +500,7 @@ agent-desktop session start --cursor --multi-agent
 export AGENT_DESKTOP_SESSION=<returned-session-id>
 ```
 
-Cursor presentation works in both headless and headed mode. Physical pointer commands use the same per-agent overlays; the interaction lease coordinates the shared OS pointer.
+Cursor presentation works in both headless and headed mode. Physical pointer commands use the same per-agent overlays; the interaction lease coordinates the shared OS pointer. `--background` pointer commands and `type <ref> --background` present the agent's cursor bound to the exact target window; `press --background` shows none.
 
 The harness gives each subagent a stable `AGENT_DESKTOP_AGENT_ID` (or global `--agent-id`, which takes precedence). IDs use 1–64 letters, digits, `-` or `_`. Every desktop UI action in this mode requires the ID; observations, clipboard operations, and session administration do not. Style commands only save a profile; the next verified action presents it. Three active IDs create three independent cursors. Reusing an ID reuses its cursor. There is no extra coordinator cursor or registration step.
 

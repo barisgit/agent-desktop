@@ -77,7 +77,11 @@ The command deadline, including an enclosing batch deadline, bounds the whole de
 
 ## Limits
 
-The app decides what to do with the event. Sandboxed or hardened apps may drop it. Chromium/Electron honors a background `mouseMoved` only while the window is still its app's main window and may swallow a first click in an inactive window. The cursor overlay is not shown.
+The app decides what to do with the event. Sandboxed or hardened apps may drop it. Chromium/Electron honors a background `mouseMoved` only while the window is still its app's main window and may swallow a first click in an inactive window.
+
+## Cursor overlay
+
+With an enabled cursor overlay, the pointer commands travel the overlay cursor to the delivered point and play the hover, wheel, or click effect there, and `type <ref> --background` travels to the ref element and outlines it after the keys. Every cue is bound to the exact target window, so it stays hidden while that window is hidden or covered. `press --background` and the window-only `type --background --window-id w-N --text TEXT` show no cursor, since the window's focused element is unknown. The travel waits for the cursor to arrive, so the window (and a ref's element) is checked again afterwards: if it moved or was replaced, nothing is sent and the command fails with `STALE_REF`, `not_delivered`. Presentation failures never change the result.
 
 ## Diagnosis
 

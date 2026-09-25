@@ -60,8 +60,17 @@ background-computer-use (`NativeWindowServerPreparation.swift`,
 - **Never claim silent success.** Success is `delivered_unverified`
   (`retry: unsafe`), including hover: a repeat is harmless, but the contract
   has no delivered-and-safe state, and the right follow-up is a snapshot.
-- **Skip the cursor overlay.** It would draw a cursor where the real one is
-  not, over a window that may be invisible.
+- **Present the cursor overlay bound to the target window.** With an enabled
+  overlay, the overlay cursor travels to the delivered point before the post
+  and plays the hover, wheel, or click effect after it (only when the post
+  may have landed). Every cue carries the exact pid and window, so native
+  visibility gating keeps it hidden while that window is hidden or covered.
+  Presentation failures are logged and never change the result.
+- **Recheck the target after the overlay travel.** The travel can wait up to
+  the arrival timeout (900 ms). The window is revalidated afterwards, and its
+  bounds and, for a ref, the element's bounds must be unchanged; otherwise
+  the post is refused as `STALE_REF`, `not_delivered`, because the global
+  point may now hit other content.
 
 ## Layers
 

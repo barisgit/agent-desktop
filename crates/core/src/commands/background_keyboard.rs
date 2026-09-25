@@ -1,11 +1,13 @@
 use serde_json::{Value, json};
+use std::time::Duration;
 
 use crate::{
     AdapterError, AppError, BackgroundKeyInput, DeliverySemantics, ErrorCode, InteractionLease,
-    RefEntry, WindowInfo,
+    Point, RefEntry, WindowInfo,
     action::Action,
     adapter::PlatformAdapter,
     commands::{
+        background_cue::BackgroundCue,
         background_delivery::{self, not_delivered, ref_window},
         combo::{ensure_combo_allowed, parse_combo_normalized},
         helpers, window_target,
@@ -23,6 +25,13 @@ const DELIVERY_BUDGET_MS: u64 = 2_000;
 /// 16 ms per character; this is generous so the deadline never compresses
 /// that pacing.
 const TEXT_BUDGET_PER_CHAR_MS: u64 = 25;
+
+/// Longest the presentation-only bounds read of `type <ref>` may take.
+const CUE_BOUNDS_MAX_MS: u64 = 150;
+
+/// Shortest bounds read worth attempting; with less spare time the cue is
+/// skipped.
+const CUE_BOUNDS_MIN_MS: u64 = 20;
 
 /// Which window receives the keys.
 pub enum BackgroundKeyboardTarget {
@@ -64,6 +73,12 @@ pub struct BackgroundKeyboardArgs {
 /// decides what the keys do, so success is `delivered_unverified` and the
 /// effect must be observed with a fresh snapshot. `--wait-for` observes the
 /// target window, never the user's frontmost app.
+///
+/// With a cursor overlay enabled, `type <ref>` travels the overlay cursor to
+/// the ref element before the focus attempt and outlines it after the keys,
+/// bound to the exact window. `press` and the window-only
+/// `type --window-id ... --text` name only a window whose focused element is
+/// unknown, so they present nothing rather than guess a point.
 pub fn execute(
     args: BackgroundKeyboardArgs,
     adapter: &dyn PlatformAdapter,
@@ -76,12 +91,24 @@ pub fn execute(
 
     let lease = adapter.acquire_interaction_lease(deadline)?;
     let (expected, entry) = resolve_target(args.target, adapter, context)?;
-    let window = window_target::revalidate_window_for_mutation(adapter, &expected, &lease)?;
+    let mut window = window_target::revalidate_window_for_mutation(adapter, &expected, &lease)?;
+    let cue = entry
+        .as_ref()
+        .and_then(|entry| element_cue(&window, entry, &input, adapter, context, &lease));
+    if let Some(cue) = &cue
+        && cue.travel(adapter, context, &lease)
+    {
+        window = window_target::revalidate_window_for_mutation(adapter, &expected, &lease)?;
+    }
     let ax_focus = match &entry {
         Some(entry) => Some(confirm_ref_focus(entry, adapter, context, &lease)?),
         None => None,
     };
-    let report = adapter.background_key_input(&window, &input, &lease)?;
+    let delivery = adapter.background_key_input(&window, &input, &lease);
+    if let Some(cue) = &cue {
+        cue.effect(adapter, context, &delivery);
+    }
+    let report = delivery?;
     drop(lease);
 
     response = background_delivery::attach_report(response, &window, &report);
@@ -129,15 +156,18 @@ fn delivery_deadline(
     timeout_ms: Option<u64>,
     input: &BackgroundKeyInput,
 ) -> Result<crate::Deadline, AppError> {
+    let resolution_ms = timeout_ms.unwrap_or(crate::DEFAULT_OPERATION_TIMEOUT_MS);
+    let total_ms = resolution_ms.saturating_add(delivery_allowance_ms(input));
+    crate::Deadline::after(total_ms).map_err(AppError::Adapter)
+}
+
+/// The part of the deadline set aside for posting `input`.
+fn delivery_allowance_ms(input: &BackgroundKeyInput) -> u64 {
     let characters = match input {
         BackgroundKeyInput::Combo(_) => 0,
         BackgroundKeyInput::Text(text) => text.chars().count() as u64,
     };
-    let resolution_ms = timeout_ms.unwrap_or(crate::DEFAULT_OPERATION_TIMEOUT_MS);
-    let total_ms = resolution_ms
-        .saturating_add(DELIVERY_BUDGET_MS)
-        .saturating_add(characters.saturating_mul(TEXT_BUDGET_PER_CHAR_MS));
-    crate::Deadline::after(total_ms).map_err(AppError::Adapter)
+    DELIVERY_BUDGET_MS.saturating_add(characters.saturating_mul(TEXT_BUDGET_PER_CHAR_MS))
 }
 
 fn resolve_target(
@@ -160,6 +190,49 @@ fn resolve_target(
             Ok((window, None))
         }
     }
+}
+
+/// The overlay cue for `type <ref>`, centered on the ref element.
+///
+/// Resolving the element and reading its bounds serve presentation only, so
+/// they share a small budget taken from the time left after reserving the
+/// delivery allowance and the overlay's arrival wait; when that leaves too
+/// little, the cue is skipped. Any failure also just skips the cue: the focus
+/// gate resolves the ref again and decides whether keys are sent.
+fn element_cue(
+    window: &WindowInfo,
+    entry: &RefEntry,
+    input: &BackgroundKeyInput,
+    adapter: &dyn PlatformAdapter,
+    context: &CommandContext,
+    lease: &InteractionLease,
+) -> Option<BackgroundCue> {
+    if !context.cursor_overlay().is_enabled() {
+        return None;
+    }
+    let reserve_ms = delivery_allowance_ms(input).saturating_add(crate::CURSOR_ARRIVAL_TIMEOUT_MS);
+    let deadline = cue_bounds_deadline(lease.deadline(), reserve_ms)?;
+    let handle = helpers::resolve_handle_within_deadline(adapter, entry, deadline).ok()?;
+    let bounds = adapter
+        .get_element_bounds(&handle, deadline)
+        .ok()
+        .flatten()?;
+    let center = Point {
+        x: bounds.x + bounds.width / 2.0,
+        y: bounds.y + bounds.height / 2.0,
+    };
+    Some(BackgroundCue::new(window, center, Some(bounds), false))
+}
+
+fn cue_bounds_deadline(deadline: crate::Deadline, reserve_ms: u64) -> Option<crate::Deadline> {
+    let spare = deadline
+        .remaining()
+        .saturating_sub(Duration::from_millis(reserve_ms));
+    let budget = spare.min(Duration::from_millis(CUE_BOUNDS_MAX_MS));
+    if budget < Duration::from_millis(CUE_BOUNDS_MIN_MS) {
+        return None;
+    }
+    Some(deadline.capped(budget))
 }
 
 /// Resolving the ref is a gate: a stale ref means the target changed. So is
@@ -210,3 +283,7 @@ mod tests;
 #[cfg(test)]
 #[path = "background_keyboard_wait_tests.rs"]
 mod wait_tests;
+
+#[cfg(test)]
+#[path = "background_keyboard_overlay_tests.rs"]
+mod overlay_tests;

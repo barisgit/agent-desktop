@@ -29,7 +29,7 @@ fn headless_default_context_allows_background_delivery_without_real_cursor() {
     .unwrap();
 
     assert_eq!(adapter.delivered().len(), 1);
-    assert_eq!(*adapter.real_mouse_events.lock().unwrap(), 0);
+    assert_eq!(adapter.real_mouse_events(), 0);
 }
 
 #[test]
@@ -45,7 +45,7 @@ fn ref_hover_derives_pid_and_exact_window_from_the_ref() {
     )
     .unwrap();
 
-    let expected = adapter.expected_windows.lock().unwrap().clone();
+    let expected = adapter.expected_windows();
     assert_eq!(expected.len(), 1);
     assert_eq!(expected[0].id, WINDOW_ID);
     assert_eq!(expected[0].pid, PID);
@@ -120,7 +120,7 @@ fn ref_from_a_non_window_surface_is_rejected_before_any_delivery() {
             "message names the surface: {}",
             error.message
         );
-        assert!(adapter.expected_windows.lock().unwrap().is_empty());
+        assert!(adapter.expected_windows().is_empty());
         assert!(adapter.delivered().is_empty());
     }
 }

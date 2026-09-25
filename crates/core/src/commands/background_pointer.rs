@@ -1,10 +1,11 @@
 use serde_json::{Value, json};
 
 use crate::{
-    AppError, BackgroundDeliveryReport, Direction, ErrorCode, Modifier, MouseButton, MouseEvent,
-    MouseEventKind, Point, WindowInfo,
-    adapter::PlatformAdapter,
+    AppError, BackgroundDeliveryReport, Direction, ErrorCode, InteractionLease, Modifier,
+    MouseButton, MouseEvent, MouseEventKind, Point, Rect, WindowInfo,
+    adapter::{NativeHandle, PlatformAdapter},
     commands::{
+        background_cue::BackgroundCue,
         background_delivery::{self, not_delivered, ref_window},
         helpers,
         pointer_action::point_deadline,
@@ -70,6 +71,9 @@ pub struct BackgroundPointerArgs {
 struct ResolvedTarget {
     window: WindowInfo,
     point: Point,
+    /// The ref's element and the bounds the point was aimed from; `None` for
+    /// coordinate targets.
+    element: Option<(NativeHandle, Rect)>,
 }
 
 /// Opt-in background pointer delivery shared by `hover`, `mouse-move`,
@@ -93,8 +97,12 @@ struct ResolvedTarget {
 /// `--wait-for` observes the target window, never the user's frontmost app,
 /// for both ref and coordinate targets.
 ///
-/// The cursor overlay is intentionally skipped: it would draw a cursor where
-/// the real cursor is not, over a window that may not even be visible.
+/// With a cursor overlay enabled, the overlay cursor travels to the delivered
+/// point and plays the hover, wheel, or click effect there, bound to the exact
+/// target window so it stays hidden while that window is hidden or covered.
+/// The travel can wait up to the arrival timeout, so the window and, for a
+/// ref, the element's bounds are checked again after it; if either changed,
+/// nothing is delivered.
 pub fn execute(
     args: BackgroundPointerArgs,
     adapter: &dyn PlatformAdapter,
@@ -115,8 +123,17 @@ pub fn execute(
     let window = window_target::revalidate_window_for_mutation(adapter, &target.window, &lease)?;
     ensure_point_in_window(&target.point, &window)?;
 
+    let click = matches!(args.action, BackgroundPointerAction::Click { .. });
+    let element_bounds = target.element.as_ref().map(|(_, bounds)| *bounds);
+    let cue = BackgroundCue::new(&window, target.point.clone(), element_bounds, click);
+    if cue.travel(adapter, context, &lease) {
+        ensure_unchanged_after_travel(&target, &window, adapter, &lease)?;
+    }
+
     let event = mouse_event(&args.action, target.point.clone());
-    let report = adapter.background_mouse_event(&window, event, &lease)?;
+    let delivery = adapter.background_mouse_event(&window, event, &lease);
+    cue.effect(adapter, context, &delivery);
+    let report = delivery?;
     drop(lease);
 
     let response = response(&args.action, &target.point, &window, report);
@@ -157,6 +174,7 @@ fn resolve_target(
                     x: bounds.x + bounds.width / 2.0,
                     y: bounds.y + bounds.height / 2.0,
                 },
+                element: Some((handle, bounds)),
             })
         }
         BackgroundPointerTarget::Point { x, y, window_id } => {
@@ -165,7 +183,11 @@ fn resolve_target(
             let mut window =
                 window_target::resolve_window_for_app(None, Some(&window_id), adapter)?;
             window.title.clear();
-            Ok(ResolvedTarget { window, point })
+            Ok(ResolvedTarget {
+                window,
+                point,
+                element: None,
+            })
         }
     }
 }
@@ -195,6 +217,37 @@ fn ensure_point_in_window(point: &Point, window: &WindowInfo) -> Result<(), AppE
     .with_details(json!({ "point": point, "window_bounds": bounds }))
     .with_suggestion(
         "Use coordinates inside the window bounds reported by list-windows; background delivery never retargets another window.",
+    )
+    .into())
+}
+
+/// The point was aimed from geometry read before the overlay travel. If the
+/// window moved or the ref's element moved inside it during that wait, the
+/// point may now hit something else, so the delivery is refused.
+fn ensure_unchanged_after_travel(
+    target: &ResolvedTarget,
+    window: &WindowInfo,
+    adapter: &dyn PlatformAdapter,
+    lease: &InteractionLease,
+) -> Result<(), AppError> {
+    let live = window_target::revalidate_window_for_mutation(adapter, &target.window, lease)?;
+    let window_unchanged = live.bounds == window.bounds;
+    let element_unchanged = target.element.as_ref().is_none_or(|(handle, bounds)| {
+        adapter
+            .get_element_bounds(handle, lease.deadline())
+            .ok()
+            .flatten()
+            == Some(*bounds)
+    });
+    if window_unchanged && element_unchanged {
+        return Ok(());
+    }
+    Err(not_delivered(
+        ErrorCode::StaleRef,
+        "The target moved while the cursor overlay traveled to it, so nothing was delivered",
+    )
+    .with_suggestion(
+        "Snapshot the window again (or re-read its bounds with list-windows) and retry at the new position.",
     )
     .into())
 }
@@ -277,3 +330,7 @@ mod wait_tests;
 #[cfg(test)]
 #[path = "background_pointer_wheel_tests.rs"]
 mod wheel_tests;
+
+#[cfg(test)]
+#[path = "background_pointer_overlay_tests.rs"]
+mod overlay_tests;

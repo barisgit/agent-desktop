@@ -1,12 +1,14 @@
 use super::*;
 use crate::adapter::{ActionOps, InputOps, NativeHandle, ObservationOps, SystemOps, WindowFilter};
+use crate::commands::background_cue::test_support::{OverlayRecorder, TravelChange, phase};
 use crate::{
-    ActionRequest, ActionResult, AdapterError, BackgroundDeliveryReport, ErrorCode, KeyCombo,
-    ProcessId, WindowState, capability,
+    ActionRequest, ActionResult, AdapterError, BackgroundDeliveryReport, CursorOverlayControl,
+    ErrorCode, KeyCombo, ProcessId, Rect, WindowState, capability,
     refs::{RefEntry, RefMap},
     refs_store::RefStore,
 };
 use std::sync::Mutex;
+use std::time::Duration;
 
 pub(super) const PID: u32 = 4242;
 pub(super) const WINDOW_ID: &str = "w-15592";
@@ -41,6 +43,8 @@ pub(super) struct Recorded {
     pub(super) focus_policies: Vec<crate::InteractionPolicy>,
     pub(super) delivered: Vec<(WindowInfo, BackgroundKeyInput)>,
     pub(super) expected_windows: Vec<WindowInfo>,
+    /// The deadline budget each element bounds read was given.
+    pub(super) bounds_budgets: Vec<Duration>,
 }
 
 /// Records every accessibility action, background key delivery, and
@@ -51,6 +55,7 @@ pub(super) struct KeyboardCaptureAdapter {
     pub(super) stale_ref: bool,
     pub(super) report: BackgroundDeliveryReport,
     pub(super) recorded: Mutex<Recorded>,
+    pub(super) overlay: OverlayRecorder,
 }
 
 impl KeyboardCaptureAdapter {
@@ -66,6 +71,7 @@ impl KeyboardCaptureAdapter {
                 ..BackgroundDeliveryReport::default()
             },
             recorded: Mutex::new(Recorded::default()),
+            overlay: OverlayRecorder::default(),
         }
     }
 
@@ -92,6 +98,20 @@ impl ObservationOps for KeyboardCaptureAdapter {
             return Err(AdapterError::new(ErrorCode::StaleRef, "element changed"));
         }
         Ok(NativeHandle::null())
+    }
+
+    fn get_element_bounds(
+        &self,
+        _handle: &NativeHandle,
+        deadline: crate::Deadline,
+    ) -> Result<Option<Rect>, AdapterError> {
+        self.call("bounds");
+        self.recorded
+            .lock()
+            .unwrap()
+            .bounds_budgets
+            .push(deadline.remaining());
+        Ok(Some(element_bounds()))
     }
 
     fn list_windows(
@@ -158,7 +178,16 @@ impl SystemOps for KeyboardCaptureAdapter {
             .unwrap()
             .expected_windows
             .push(window.clone());
+        if self.overlay.changed(TravelChange::WindowReplaced) {
+            return Ok(live_window(self.live_pid + 1));
+        }
         Ok(live_window(self.live_pid))
+    }
+
+    fn update_cursor_overlay(&self, control: &CursorOverlayControl) -> Result<(), AdapterError> {
+        self.call(format!("overlay:{:?}", phase(control)));
+        let delivered = self.recorded.lock().unwrap().delivered.len();
+        self.overlay.record(delivered, control)
     }
 
     fn is_blocked_combo(&self, combo: &KeyCombo) -> bool {
@@ -177,15 +206,40 @@ impl SystemOps for KeyboardCaptureAdapter {
     }
 }
 
+pub(super) fn element_bounds() -> Rect {
+    Rect {
+        x: 100.0,
+        y: 200.0,
+        width: 300.0,
+        height: 40.0,
+    }
+}
+
 pub(super) fn ref_snapshot(source_window_id: Option<&str>) -> String {
     ref_snapshot_on(source_window_id, crate::adapter::SnapshotSurface::Window)
+}
+
+pub(super) fn ref_snapshot_in(session_id: Option<&str>, source_window_id: Option<&str>) -> String {
+    store_ref_snapshot(
+        session_id,
+        source_window_id,
+        crate::adapter::SnapshotSurface::Window,
+    )
 }
 
 pub(super) fn ref_snapshot_on(
     source_window_id: Option<&str>,
     source_surface: crate::adapter::SnapshotSurface,
 ) -> String {
-    let store = RefStore::new().unwrap();
+    store_ref_snapshot(None, source_window_id, source_surface)
+}
+
+fn store_ref_snapshot(
+    session_id: Option<&str>,
+    source_window_id: Option<&str>,
+    source_surface: crate::adapter::SnapshotSurface,
+) -> String {
+    let store = RefStore::for_session(session_id).unwrap();
     let mut refmap = RefMap::new();
     refmap.allocate(RefEntry {
         process: crate::RefProcess {

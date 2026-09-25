@@ -40,7 +40,7 @@ fn wheel_posts_line_deltas_at_the_point_and_reports_unverified_delivery() {
     assert_eq!(value["background"]["window_id"], WINDOW_ID);
     assert_eq!(value["disposition"]["delivery"], "delivered_unverified");
     assert_eq!(value["disposition"]["retry"], "unsafe");
-    assert_eq!(*adapter.real_mouse_events.lock().unwrap(), 0);
+    assert_eq!(adapter.real_mouse_events(), 0);
 }
 
 #[test]
@@ -70,7 +70,7 @@ fn ref_scroll_aims_the_wheel_at_the_element_center_of_the_refs_window() {
             delta_y: -4.0
         }
     ));
-    let expected = adapter.expected_windows.lock().unwrap();
+    let expected = adapter.expected_windows();
     assert_eq!(expected[0].id, WINDOW_ID);
     assert_eq!(expected[0].pid, ProcessId::new(PID));
 }
@@ -129,6 +129,6 @@ fn ref_scroll_from_a_non_window_surface_is_rejected_before_any_delivery() {
         panic!("expected adapter error");
     };
     assert_eq!(error.disposition, DeliverySemantics::not_delivered());
-    assert!(adapter.expected_windows.lock().unwrap().is_empty());
+    assert!(adapter.expected_windows().is_empty());
     assert!(adapter.delivered().is_empty());
 }

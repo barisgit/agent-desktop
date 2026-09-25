@@ -161,6 +161,16 @@ that were requested; `degraded` lists the ones that were unavailable.
 - **Brief focus steal.** Focus preservation is best effort. As with the
   pointer, the guard restores the user's app when the target takes the
   front, leaves a switch to any other app alone, and reports both.
+- **Cursor overlay.** With an enabled overlay, `type <ref> --background`
+  travels to the ref element before the focus gate and outlines it after the
+  keys, bound to the exact pid and window. The element bounds read serves
+  only presentation, so it gets at most 150 ms of the time left after
+  reserving the delivery allowance and the arrival wait, and is skipped when
+  that is too little. After the travel the window is revalidated and the
+  focus gate re-resolves the ref, so a target replaced during the travel
+  receives nothing. `press --background` and `type --window-id --text` present
+  nothing: the window's focused element is unknown, and a cursor at a
+  guessed point would mislead.
 
 ## Verification
 

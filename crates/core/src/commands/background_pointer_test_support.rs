@@ -1,7 +1,9 @@
 use super::*;
 use crate::adapter::{ActionOps, InputOps, NativeHandle, ObservationOps, SystemOps, WindowFilter};
+use crate::commands::background_cue::test_support::{OverlayRecorder, TravelChange};
 use crate::{
-    AdapterError, ProcessId, Rect, WindowState, capability,
+    AdapterError, CursorOverlayControl, DeliverySemantics, ProcessId, Rect, WindowState,
+    capability,
     refs::{RefEntry, RefMap},
     refs_store::RefStore,
 };
@@ -31,13 +33,30 @@ pub(super) fn live_window(pid: u32) -> WindowInfo {
     }
 }
 
+/// `rect` shifted by the distance a moving target travels in these tests.
+pub(super) fn moved(rect: Rect) -> Rect {
+    Rect {
+        x: rect.x + 40.0,
+        ..rect
+    }
+}
+
+/// Everything the adapter was asked to do.
+#[derive(Default)]
+pub(super) struct Recorded {
+    pub(super) expected_windows: Vec<WindowInfo>,
+    pub(super) delivered: Vec<(WindowInfo, MouseEvent)>,
+    pub(super) real_mouse_events: u32,
+}
+
 pub(super) struct BackgroundCaptureAdapter {
     pub(super) live_pid: u32,
     pub(super) element_bounds: Rect,
     pub(super) report: BackgroundDeliveryReport,
-    pub(super) expected_windows: Mutex<Vec<WindowInfo>>,
-    pub(super) delivered: Mutex<Vec<(WindowInfo, MouseEvent)>>,
-    pub(super) real_mouse_events: Mutex<u32>,
+    /// Background posts are refused before anything is sent.
+    pub(super) fail_delivery: bool,
+    pub(super) recorded: Mutex<Recorded>,
+    pub(super) overlay: OverlayRecorder,
 }
 
 impl BackgroundCaptureAdapter {
@@ -55,14 +74,22 @@ impl BackgroundCaptureAdapter {
                 frontmost_pid_after: Some(ProcessId::new(7)),
                 ..BackgroundDeliveryReport::default()
             },
-            expected_windows: Mutex::new(Vec::new()),
-            delivered: Mutex::new(Vec::new()),
-            real_mouse_events: Mutex::new(0),
+            fail_delivery: false,
+            recorded: Mutex::new(Recorded::default()),
+            overlay: OverlayRecorder::default(),
         }
     }
 
     pub(super) fn delivered(&self) -> Vec<(WindowInfo, MouseEvent)> {
-        self.delivered.lock().unwrap().clone()
+        self.recorded.lock().unwrap().delivered.clone()
+    }
+
+    pub(super) fn expected_windows(&self) -> Vec<WindowInfo> {
+        self.recorded.lock().unwrap().expected_windows.clone()
+    }
+
+    pub(super) fn real_mouse_events(&self) -> u32 {
+        self.recorded.lock().unwrap().real_mouse_events
     }
 }
 
@@ -80,6 +107,9 @@ impl ObservationOps for BackgroundCaptureAdapter {
         _handle: &NativeHandle,
         _deadline: crate::Deadline,
     ) -> Result<Option<Rect>, AdapterError> {
+        if self.overlay.changed(TravelChange::ElementMoves) {
+            return Ok(Some(moved(self.element_bounds)));
+        }
         Ok(Some(self.element_bounds))
     }
 
@@ -100,7 +130,7 @@ impl InputOps for BackgroundCaptureAdapter {
         _event: MouseEvent,
         _lease: &crate::InteractionLease,
     ) -> Result<(), AdapterError> {
-        *self.real_mouse_events.lock().unwrap() += 1;
+        self.recorded.lock().unwrap().real_mouse_events += 1;
         Ok(())
     }
 
@@ -110,7 +140,15 @@ impl InputOps for BackgroundCaptureAdapter {
         event: MouseEvent,
         _lease: &crate::InteractionLease,
     ) -> Result<BackgroundDeliveryReport, AdapterError> {
-        self.delivered.lock().unwrap().push((window.clone(), event));
+        if self.fail_delivery {
+            return Err(AdapterError::new(ErrorCode::ActionFailed, "post refused")
+                .with_disposition(DeliverySemantics::not_delivered()));
+        }
+        self.recorded
+            .lock()
+            .unwrap()
+            .delivered
+            .push((window.clone(), event));
         Ok(self.report.clone())
     }
 }
@@ -123,8 +161,21 @@ impl SystemOps for BackgroundCaptureAdapter {
         window: &WindowInfo,
         _deadline: crate::Deadline,
     ) -> Result<WindowInfo, AdapterError> {
-        self.expected_windows.lock().unwrap().push(window.clone());
-        Ok(live_window(self.live_pid))
+        self.recorded
+            .lock()
+            .unwrap()
+            .expected_windows
+            .push(window.clone());
+        let mut live = live_window(self.live_pid);
+        if self.overlay.changed(TravelChange::WindowMoves) {
+            live.bounds = live.bounds.map(moved);
+        }
+        Ok(live)
+    }
+
+    fn update_cursor_overlay(&self, control: &CursorOverlayControl) -> Result<(), AdapterError> {
+        let delivered = self.recorded.lock().unwrap().delivered.len();
+        self.overlay.record(delivered, control)
     }
 }
 
@@ -132,11 +183,27 @@ pub(super) fn ref_snapshot(source_window_id: Option<&str>) -> String {
     ref_snapshot_on(source_window_id, crate::adapter::SnapshotSurface::Window)
 }
 
+pub(super) fn ref_snapshot_in(session_id: Option<&str>, source_window_id: Option<&str>) -> String {
+    store_ref_snapshot(
+        session_id,
+        source_window_id,
+        crate::adapter::SnapshotSurface::Window,
+    )
+}
+
 pub(super) fn ref_snapshot_on(
     source_window_id: Option<&str>,
     source_surface: crate::adapter::SnapshotSurface,
 ) -> String {
-    let store = RefStore::new().unwrap();
+    store_ref_snapshot(None, source_window_id, source_surface)
+}
+
+fn store_ref_snapshot(
+    session_id: Option<&str>,
+    source_window_id: Option<&str>,
+    source_surface: crate::adapter::SnapshotSurface,
+) -> String {
+    let store = RefStore::for_session(session_id).unwrap();
     let mut refmap = RefMap::new();
     refmap.allocate(RefEntry {
         process: crate::RefProcess {
