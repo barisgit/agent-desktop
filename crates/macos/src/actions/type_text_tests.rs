@@ -12,22 +12,26 @@ struct Field {
     subrole: Result<Option<String>, i32>,
     value: RefCell<Option<String>>,
     selection: Option<Range<usize>>,
+    focused: Option<bool>,
     honours_selected_text: bool,
     value_settable: bool,
+    leaf: bool,
     value_rejection: Option<DeliverySemantics>,
     log: RefCell<Vec<String>>,
 }
 
 impl Field {
-    /// A Chromium or Electron input: it accepts `AXSelectedText` but ignores
-    /// it, and honours a settable `AXValue`.
+    /// A focused, childless Chromium or Electron input: it accepts
+    /// `AXSelectedText` but ignores it, and honours a settable `AXValue`.
     fn electron(value: &str, selection: Range<usize>) -> Self {
         Self {
             subrole: Ok(None),
             value: RefCell::new(Some(value.into())),
             selection: Some(selection),
+            focused: Some(true),
             honours_selected_text: false,
             value_settable: true,
+            leaf: true,
             value_rejection: None,
             log: RefCell::new(Vec::new()),
         }
@@ -69,9 +73,19 @@ impl SemanticTextTarget for Field {
         self.selection.clone()
     }
 
+    fn read_focused(&self, _deadline: Deadline) -> Option<bool> {
+        self.record("read AXFocused".into());
+        self.focused
+    }
+
     fn value_is_settable(&self, _deadline: Deadline) -> bool {
         self.record("read AXValue settable".into());
         self.value_settable
+    }
+
+    fn value_is_leaf(&self, _deadline: Deadline) -> bool {
+        self.record("read AXChildren".into());
+        self.leaf
     }
 
     fn write_selected_text(&self, text: &str, _deadline: Deadline) -> Result<(), AdapterError> {
@@ -130,6 +144,32 @@ fn honoured_insertion_is_not_written_again_through_the_value() {
     assert_eq!(labels(&steps), ["AXSelectedText"]);
     assert_eq!(field.writes(), ["write AXSelectedText=X"]);
     assert_eq!(field.value().as_deref(), Some("aXb"));
+}
+
+#[test]
+fn unfocused_field_is_never_written_through_the_value() {
+    for focused in [Some(false), None] {
+        let field = Field {
+            focused,
+            ..Field::electron("ab", 1..1)
+        };
+        let steps = type_into(&field, "AXTextField", "X").unwrap();
+
+        assert_eq!(labels(&steps), ["AXSelectedText"], "{focused:?}");
+        assert_eq!(field.writes(), ["write AXSelectedText=X"], "{focused:?}");
+    }
+}
+
+#[test]
+fn rich_text_target_is_never_written_through_the_value() {
+    let field = Field {
+        leaf: false,
+        ..Field::electron("ab", 1..1)
+    };
+    let steps = type_into(&field, "AXTextArea", "X").unwrap();
+
+    assert_eq!(labels(&steps), ["AXSelectedText"]);
+    assert_eq!(field.writes(), ["write AXSelectedText=X"]);
 }
 
 #[test]

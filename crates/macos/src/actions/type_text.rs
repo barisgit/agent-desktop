@@ -12,7 +12,10 @@ use crate::tree::AXElement;
 /// the full composed value is written once through `AXValue`. That write is
 /// absolute, and the app applies both writes in order, so an insertion that
 /// only landed late is overwritten rather than duplicated. Secure fields never
-/// take this path.
+/// take this path, and the composed write only runs when the field is a
+/// confirmed-focused, childless (atomic) text control; an unfocused field or a
+/// rich contenteditable root keeps the pre-fallback `AXSelectedText`-only
+/// result.
 pub(crate) fn execute_type(
     element: &AXElement,
     text: &str,
@@ -37,7 +40,9 @@ trait SemanticTextTarget {
     fn read_subrole(&self, deadline: Deadline) -> Result<Option<String>, i32>;
     fn read_value(&self, deadline: Deadline) -> Option<String>;
     fn read_selection(&self, deadline: Deadline) -> Option<std::ops::Range<usize>>;
+    fn read_focused(&self, deadline: Deadline) -> Option<bool>;
     fn value_is_settable(&self, deadline: Deadline) -> bool;
+    fn value_is_leaf(&self, deadline: Deadline) -> bool;
     fn write_selected_text(&self, text: &str, deadline: Deadline) -> Result<(), AdapterError>;
     fn write_value(&self, value: &str, deadline: Deadline) -> Result<(), AdapterError>;
 }
@@ -55,11 +60,14 @@ fn type_semantically(
 
     let before = target.read_value(deadline);
     let selection = target.read_selection(deadline);
+    let confirmed_focused = target.read_focused(deadline) == Some(true);
     target.write_selected_text(text, deadline)?;
     let after = target.read_value(deadline);
 
     let fallback = fallback_value(before.as_deref(), selection, after.as_deref(), text);
-    let Some(value) = fallback.filter(|_| target.value_is_settable(deadline)) else {
+    let Some(value) = fallback.filter(|_| {
+        confirmed_focused && target.value_is_settable(deadline) && target.value_is_leaf(deadline)
+    }) else {
         return Ok(vec![semantic_step("AXSelectedText")]);
     };
     target
@@ -133,11 +141,28 @@ impl SemanticTextTarget for AXElement {
         crate::tree::attributes::selected_text_range(self, deadline)
     }
 
+    fn read_focused(&self, deadline: Deadline) -> Option<bool> {
+        crate::tree::attributes::copy_bool_attr(self, "AXFocused", deadline)
+    }
+
     fn value_is_settable(&self, deadline: Deadline) -> bool {
         matches!(
             crate::actions::ax_helpers::is_attr_settable(self, "AXValue", deadline),
             Ok(true)
         )
+    }
+
+    /// An atomic text control (a plain field) reports no accessibility
+    /// children; its content is exposed only through `AXValue`. A
+    /// contenteditable root exposes its content as child nodes even when it
+    /// shares the same role, so it is excluded here.
+    fn value_is_leaf(&self, deadline: Deadline) -> bool {
+        match crate::tree::attributes::copy_ax_array_prefix_result(self, "AXChildren", 1, deadline)
+        {
+            Ok(None) => true,
+            Ok(Some(children)) => children.is_empty(),
+            Err(_) => false,
+        }
     }
 
     fn write_selected_text(&self, text: &str, deadline: Deadline) -> Result<(), AdapterError> {
