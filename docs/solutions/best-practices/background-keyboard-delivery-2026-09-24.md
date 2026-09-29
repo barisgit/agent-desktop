@@ -46,7 +46,7 @@ menu or accessibility key mapping.
 ```bash
 agent-desktop press cmd+s --background --window-id w-15592
 agent-desktop type @s8f3k2p9:e7 "hello from background, 42!" --background
-agent-desktop type --background --window-id w-15592 "into the focused field"
+agent-desktop type --background --window-id w-15592 --text "into the focused field"
 ```
 
 - `press --background` needs `--window-id` (from `list-windows`) and rejects
@@ -59,7 +59,10 @@ agent-desktop type --background --window-id w-15592 "into the focused field"
   "verified"`). An error or an unconfirmed read-back is `ACTION_FAILED`,
   not delivered, because the keys would otherwise land in whatever field
   the window focused before. A stale ref is `STALE_REF`, not delivered.
-- `type --background --window-id w-N TEXT` (no ref) types into whatever
+  A ref from a menu, sheet, popover, alert, or focused-surface snapshot is
+  `ACTION_NOT_SUPPORTED`, not delivered: it does not live in its recorded
+  source window, so the keys would reach the wrong element.
+- `type --background --window-id w-N --text TEXT` (no ref) types into whatever
   that window has focused, like `press --background --window-id`. Use it
   after placing the caret with `mouse-click --background`, or when an
   inactive Electron window will not confirm accessibility focus.
@@ -153,7 +156,7 @@ that were requested; `degraded` lists the ones that were unavailable.
 - **Focus within the window.** Keys reach the window's first responder. The
   ref form refuses to type unless accessibility focus on the element is
   confirmed; inactive Electron windows often cannot confirm it, and then
-  `mouse-click --background` on the field plus `type --window-id` is the
+  `mouse-click --background` on the field plus `type --window-id --text` is the
   route.
 - **Brief focus steal.** Focus preservation is best effort. As with the
   pointer, the guard restores the user's app when the target takes the

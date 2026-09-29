@@ -178,6 +178,13 @@ impl SystemOps for KeyboardCaptureAdapter {
 }
 
 pub(super) fn ref_snapshot(source_window_id: Option<&str>) -> String {
+    ref_snapshot_on(source_window_id, crate::adapter::SnapshotSurface::Window)
+}
+
+pub(super) fn ref_snapshot_on(
+    source_window_id: Option<&str>,
+    source_surface: crate::adapter::SnapshotSurface,
+) -> String {
     let store = RefStore::new().unwrap();
     let mut refmap = RefMap::new();
     refmap.allocate(RefEntry {
@@ -206,7 +213,7 @@ pub(super) fn ref_snapshot(source_window_id: Option<&str>) -> String {
             source_window_id: source_window_id.map(str::to_string),
             source_window_title: Some("stale title".into()),
             source_window_bounds_hash: None,
-            source_surface: crate::adapter::SnapshotSurface::Window,
+            source_surface,
         },
         scope: crate::RefScope {
             root_ref: None,

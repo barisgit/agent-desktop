@@ -21,15 +21,17 @@ fn default_ref_timeout_ms() -> u64 {
     5000
 }
 
-/// `REF` may be omitted only for `type --background --window-id w-N TEXT`;
-/// `allow_missing_positional` lets the lone positional bind to `TEXT`.
+/// `type REF TEXT` is the only positional form, so a lone positional is always
+/// a ref and is never typed as text. The window-only form,
+/// `type --background --window-id w-N --text TEXT`, has no ref and takes its
+/// text from `--text`. Batch JSON has no positional ambiguity and always
+/// uses `text`.
 #[derive(Parser, Debug, Deserialize)]
-#[command(allow_missing_positional = true)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct TypeArgs {
     #[arg(
         value_name = "REF",
-        help = "Qualified ref from snapshot (@<snapshot_id>:eN), or legacy @eN with --snapshot; omit only with --background --window-id"
+        help = "Qualified ref from snapshot (@<snapshot_id>:eN), or legacy @eN with --snapshot; omit only for --background --window-id --text"
     )]
     #[serde(default)]
     pub ref_id: Option<String>,
@@ -39,8 +41,25 @@ pub(crate) struct TypeArgs {
         help = "Snapshot ID required for a legacy bare @eN ref; omit for a qualified ref"
     )]
     pub snapshot: Option<String>,
-    #[arg(value_name = "TEXT", allow_hyphen_values = true, help = "Text to type")]
-    pub text: String,
+    #[arg(
+        value_name = "TEXT",
+        allow_hyphen_values = true,
+        required_unless_present = "text_flag",
+        conflicts_with = "text_flag",
+        help = "Text to type into the ref"
+    )]
+    #[serde(default)]
+    pub text: Option<String>,
+    #[arg(
+        long = "text",
+        id = "text_flag",
+        value_name = "TEXT",
+        allow_hyphen_values = true,
+        requires = "window_id",
+        help = "Text to type for the window-only form: type --background --window-id w-N --text TEXT"
+    )]
+    #[serde(skip)]
+    pub text_flag: Option<String>,
     #[arg(
         long = "timeout-ms",
         default_value_t = 5000,
@@ -57,7 +76,7 @@ pub(crate) struct TypeArgs {
     #[arg(
         long = "window-id",
         value_name = "WINDOW_ID",
-        help = "Exact target window for --background without a ref (from list-windows, e.g. w-15592); keys reach that window's focused element"
+        help = "Exact target window for --background without a ref (from list-windows, e.g. w-15592), with the text in --text; keys reach that window's focused element"
     )]
     #[serde(default)]
     pub window_id: Option<String>,

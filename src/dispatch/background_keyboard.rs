@@ -48,9 +48,12 @@ pub(super) fn press(
 
 /// `type --background` takes its window from a ref (and types only once
 /// focus on that element is confirmed) or from `--window-id` (and types into
-/// whatever that window has focused), never both.
+/// whatever that window has focused), never both. The guard sits here rather
+/// than in clap so batch entries, which set `ref_id` and `window_id`
+/// directly, are held to it too.
 pub(super) fn type_text(
     args: TypeArgs,
+    text: String,
     adapter: &dyn PlatformAdapter,
     context: &CommandContext,
 ) -> Result<Value, AppError> {
@@ -69,13 +72,13 @@ pub(super) fn type_text(
         (None, None) => {
             return Err(AppError::invalid_input_with_suggestion(
                 "type --background requires a ref or --window-id",
-                "Pass the field's ref, or --window-id (from list-windows) to type into that window's focused element.",
+                "Pass the field's ref, or --window-id (from list-windows) with --text to type into that window's focused element.",
             ));
         }
     };
     execute(
         BackgroundKeyboardArgs {
-            input: BackgroundKeyboardInput::Type { text: args.text },
+            input: BackgroundKeyboardInput::Type { text },
             target,
             timeout_ms: helpers::normalize_action_timeout_ms(args.timeout_ms),
         },

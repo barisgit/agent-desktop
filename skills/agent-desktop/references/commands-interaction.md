@@ -143,7 +143,7 @@ Headless uses semantic context-menu actions. `--headed` performs a physical righ
 agent-desktop type @s8f3k2p9:e2 "hello@example.com"
 agent-desktop type @s8f3k2p9:e2 "multi line\ntext"
 ```
-Headless `type` uses `AXSelectedText` without focusing the app or synthesizing keys. Pass `--headed` to focus the target and synthesize keyboard input. Use `set-value` when direct semantic value assignment is the intended interaction. For editors that ignore `AXSelectedText` (VS Code, other Electron apps) in a window the user is not using, use `type <ref> <text> --background` or `type --background --window-id w-N <text>` ([background-input.md](background-input.md#keyboard-press-type)).
+Headless `type` uses `AXSelectedText` without focusing the app or synthesizing keys. Pass `--headed` to focus the target and synthesize keyboard input. Use `set-value` when direct semantic value assignment is the intended interaction. For editors that ignore `AXSelectedText` (VS Code, other Electron apps) in a window the user is not using, use `type <ref> <text> --background` or `type --background --window-id w-N --text <text>` (the window-only form takes its text from `--text`, so a lone positional is always a ref; [background-input.md](background-input.md#keyboard-press-type)).
 
 When the value and selection are readable, insertion checks the resulting value. A mismatch or unavailable readback returns `ACTION_FAILED`; inspect the current state and delivery disposition before writing again. Secure-field redaction is the explicit exception described above: a delivered write remains unverified rather than failing solely because its value is hidden.
 
@@ -277,9 +277,7 @@ Use the actual window title for the current app language. To check a window that
 
 Dangerous shortcuts (e.g. `cmd+q`, `ctrl+cmd+q`, `cmd+alt+esc`, `cmd+shift+delete`) are refused with `POLICY_DENIED`. Normalization covers modifier order and key-name aliases (`escape`/`esc`, `backspace`/`delete`). The block is the **platform adapter's** decision, not core's — the calling agent stays in control: pass `--force` to send a flagged `press` combo anyway (`agent-desktop press cmd+q --force`). The reserved held-key names reject even when `--force` is present.
 
-#### Background keys (`--background`)
-
-`press` and `type` accept `--background` (macOS only), an explicit opt-in, best-effort mode that posts key events to one exact window's process without activating its app. Targeting, results, deadlines, and limits are in [background-input.md](background-input.md#keyboard-press-type).
+**Background keys.** `press` and `type` accept `--background` (macOS only), an explicit opt-in, best-effort mode that posts key events to one exact window's process without activating its app. Targeting, results, deadlines, and limits are in [background-input.md](background-input.md#keyboard-press-type).
 
 ### key-down / key-up
 

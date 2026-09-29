@@ -194,7 +194,7 @@ fn focus_unconfirmed(detail: impl Into<String>) -> AdapterError {
         "Could not confirm accessibility focus on the ref's element, so no keys were sent",
     )
     .with_suggestion(
-        "Click the field with mouse-click --background, then run type --background --window-id <window> to type into the window's focused element; or snapshot again and retry with a fresh ref.",
+        "Click the field with mouse-click --background, then run type --background --window-id <window> --text <text> to type into the window's focused element; or snapshot again and retry with a fresh ref.",
     )
     .with_platform_detail(detail)
 }

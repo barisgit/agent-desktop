@@ -132,7 +132,9 @@ fn batch_background_keys_share_cli_routing_and_rejections() {
             {"command": "press", "args": {"combo": "return", "background": true}},
             {"command": "press", "args": {"combo": "return", "window_id": "w-9555"}},
             {"command": "type", "args": {"text": "hi", "background": true, "window_id": "w-9555"}},
-            {"command": "type", "args": {"text": "hi", "background": true}}
+            {"command": "type", "args": {"text": "hi", "background": true}},
+            {"command": "type", "args": {"ref_id": "@s8f3k2p9:e1", "text": "hi", "background": true, "window_id": "w-9555"}},
+            {"command": "type", "args": {"background": true, "window_id": "w-9555"}}
         ])
         .to_string(),
         stop_on_error: false,
@@ -155,6 +157,23 @@ fn batch_background_keys_share_cli_routing_and_rejections() {
     assert_eq!(results[3]["ok"], true, "{}", results[3]);
     assert_eq!(results[3]["data"]["typed"], true);
     assert_eq!(results[4]["error"]["code"], "INVALID_ARGS");
+    assert_eq!(
+        results[5]["error"]["code"], "INVALID_ARGS",
+        "{}",
+        results[5]
+    );
+    assert!(
+        results[5]["error"]["message"]
+            .as_str()
+            .is_some_and(|message| message.contains("--window-id")),
+        "{}",
+        results[5]
+    );
+    assert_eq!(
+        results[6]["error"]["code"], "INVALID_ARGS",
+        "{}",
+        results[6]
+    );
     assert_eq!(adapter.background_keys.lock().unwrap().len(), 2);
 }
 
@@ -167,6 +186,7 @@ fn background_type_with_a_window_id_types_into_that_window_without_a_ref() {
             "--background",
             "--window-id",
             BackgroundAdapter::WINDOW_ID,
+            "--text",
             "hello there",
         ]),
         false,
@@ -193,7 +213,15 @@ fn type_target_combinations_that_name_no_single_window_are_rejected() {
             "--window-id",
             BackgroundAdapter::WINDOW_ID,
         ],
-        &["type", "hi", "--background"],
+        &[
+            "type",
+            "@s1:e1",
+            "--background",
+            "--window-id",
+            BackgroundAdapter::WINDOW_ID,
+            "--text",
+            "hi",
+        ],
         &[
             "type",
             "@s1:e1",
@@ -201,7 +229,13 @@ fn type_target_combinations_that_name_no_single_window_are_rejected() {
             "--window-id",
             BackgroundAdapter::WINDOW_ID,
         ],
-        &["type", "hi"],
+        &[
+            "type",
+            "--window-id",
+            BackgroundAdapter::WINDOW_ID,
+            "--text",
+            "hi",
+        ],
     ];
 
     for argv in cases {

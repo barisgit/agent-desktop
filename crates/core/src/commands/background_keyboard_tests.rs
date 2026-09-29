@@ -221,6 +221,37 @@ fn ref_without_exact_source_window_is_rejected() {
 }
 
 #[test]
+fn ref_from_a_non_window_surface_is_rejected_before_focus_or_keys() {
+    use crate::adapter::SnapshotSurface;
+
+    let _guard = HomeGuard::new();
+    for surface in [
+        SnapshotSurface::Menu,
+        SnapshotSurface::Sheet,
+        SnapshotSurface::Popover,
+        SnapshotSurface::Alert,
+        SnapshotSurface::Focused,
+    ] {
+        let snapshot_id = ref_snapshot_on(Some(WINDOW_ID), surface);
+        let adapter = KeyboardCaptureAdapter::new();
+
+        let err = execute(
+            type_args("hello", snapshot_id),
+            &adapter,
+            &CommandContext::default(),
+        )
+        .unwrap_err();
+
+        assert_eq!(err.code(), "ACTION_NOT_SUPPORTED", "surface {surface:?}");
+        let AppError::Adapter(error) = err else {
+            panic!("expected adapter error");
+        };
+        assert_eq!(error.disposition, DeliverySemantics::not_delivered());
+        assert!(adapter.calls().is_empty(), "{:?}", adapter.calls());
+    }
+}
+
+#[test]
 fn window_owned_by_a_different_process_is_rejected_before_posting() {
     let mut adapter = KeyboardCaptureAdapter::new();
     adapter.live_pid = PID + 1;

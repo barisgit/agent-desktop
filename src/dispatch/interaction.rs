@@ -53,12 +53,18 @@ pub(super) fn right_click(
 }
 
 pub(super) fn type_text(
-    args: TypeArgs,
+    mut args: TypeArgs,
     adapter: &dyn PlatformAdapter,
     context: &CommandContext,
 ) -> Result<Value, AppError> {
+    let Some(text) = args.text.take().or_else(|| args.text_flag.take()) else {
+        return Err(AppError::invalid_input_with_suggestion(
+            "type requires text",
+            "Pass the text after the ref, e.g. type @s1:e3 \"text\", or use --text with --background --window-id.",
+        ));
+    };
     if args.background {
-        return background_keyboard::type_text(args, adapter, context);
+        return background_keyboard::type_text(args, text, adapter, context);
     }
     super::background_pointer::reject_window_id_without_background(args.window_id.as_deref())?;
     let Some(ref_id) = args.ref_id else {
@@ -71,7 +77,7 @@ pub(super) fn type_text(
         type_text_command::TypeArgs {
             ref_id,
             snapshot_id: args.snapshot,
-            text: args.text,
+            text,
             timeout_ms: helpers::normalize_action_timeout_ms(args.timeout_ms),
         },
         adapter,

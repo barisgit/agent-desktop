@@ -247,3 +247,45 @@ fn background_key_flags_parse_and_default_off_for_cli_and_batch() {
     assert!(!press_batch.background && press_batch.window_id.is_none());
     assert!(!type_batch.background);
 }
+
+#[test]
+fn type_keeps_positional_ref_and_text_around_flags() {
+    let args = TypeArgs::try_parse_from(["type", "@e2", "--snapshot", "s1", "hello"]).unwrap();
+
+    assert_eq!(args.ref_id.as_deref(), Some("@e2"));
+    assert_eq!(args.snapshot.as_deref(), Some("s1"));
+    assert_eq!(args.text.as_deref(), Some("hello"));
+    assert!(args.text_flag.is_none());
+}
+
+#[test]
+fn window_only_background_type_takes_its_text_as_a_flag() {
+    let args = TypeArgs::try_parse_from([
+        "type",
+        "--background",
+        "--window-id",
+        "w-15592",
+        "--text",
+        "-hello",
+    ])
+    .unwrap();
+
+    assert!(args.ref_id.is_none());
+    assert!(args.text.is_none());
+    assert_eq!(args.text_flag.as_deref(), Some("-hello"));
+    assert_eq!(args.window_id.as_deref(), Some("w-15592"));
+}
+
+#[test]
+fn a_lone_type_positional_is_a_ref_never_silently_typed_text() {
+    let rejected: [&[&str]; 4] = [
+        &["type", "@e2", "--background", "--window-id", "w-1"],
+        &["type", "--background", "--window-id", "w-1", "hello"],
+        &["type", "--background", "--text", "hello"],
+        &["type", "@e2", "hello", "--text", "again"],
+    ];
+
+    for argv in rejected {
+        assert!(TypeArgs::try_parse_from(argv).is_err(), "{argv:?}");
+    }
+}
