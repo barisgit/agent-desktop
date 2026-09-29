@@ -92,3 +92,22 @@ fn a_stalled_window_lookup_cannot_consume_the_action_budget() {
     );
     assert!(adapter.presented.lock().unwrap().is_empty());
 }
+
+/// A headed click with a wait budget runs the actionability preflight in the
+/// wait loop, then again permissively and strictly before dispatch. The window
+/// lookup is presentation-only, so it must not be repeated for every pass.
+#[test]
+fn one_action_looks_up_the_presentation_window_once_across_preflights() {
+    let adapter = StalledWindowAdapter::default();
+    let context = enabled_context().with_headed(true);
+    let request = ActionRequest::headed(Action::Click).with_timeout_ms(Some(3_000));
+
+    let result = execute_entry_with_context(&adapter, &entry(), request, &context);
+
+    assert!(
+        result.is_ok(),
+        "presentation must not fail the action: {result:?}"
+    );
+    assert_eq!(adapter.lookup_budgets.lock().unwrap().len(), 1);
+    assert!(adapter.presented.lock().unwrap().is_empty());
+}
