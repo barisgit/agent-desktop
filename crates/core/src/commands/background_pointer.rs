@@ -2,7 +2,8 @@ use serde_json::{Value, json};
 
 use crate::{
     AdapterError, AppError, BackgroundPointerReport, DeliverySemantics, Direction, ErrorCode,
-    Modifier, MouseButton, MouseEvent, MouseEventKind, Point, RefEntry, WindowInfo, WindowState,
+    Modifier, MouseButton, MouseEvent, MouseEventKind, Point, RefEntry, SnapshotSurface,
+    WindowInfo, WindowState,
     adapter::PlatformAdapter,
     commands::{helpers, pointer_action::point_deadline, window_target},
     context::CommandContext,
@@ -173,7 +174,27 @@ fn resolve_target(
 /// The exact window a ref was captured from. The title is left empty because
 /// titles are mutable and the pid, process instance, and window number
 /// already pin the identity.
+///
+/// Only refs from an ordinary window snapshot qualify. A menu, sheet,
+/// popover, alert, or focused-surface ref does not live in its recorded
+/// source window, and background delivery skips the window server's hit
+/// test, so the event would land in whatever that window shows at the point.
 fn ref_window(entry: &RefEntry) -> Result<WindowInfo, AppError> {
+    let surface = entry.source.source_surface;
+    if !SnapshotSurface::is_window(&surface) {
+        return Err(not_delivered(
+            ErrorCode::ActionNotSupported,
+            format!(
+                "Background delivery cannot target a ref from a {} surface; it needs a ref from an ordinary window",
+                surface.as_str()
+            ),
+        )
+        .with_details(json!({ "source_surface": surface.as_str() }))
+        .with_suggestion(
+            "Drop --background to use the headless semantic action on this ref, or use --headed for real input.",
+        )
+        .into());
+    }
     let process_instance = entry
         .process
         .process_instance
@@ -355,3 +376,7 @@ mod tests;
 #[cfg(test)]
 #[path = "background_pointer_wait_tests.rs"]
 mod wait_tests;
+
+#[cfg(test)]
+#[path = "background_pointer_wheel_tests.rs"]
+mod wheel_tests;

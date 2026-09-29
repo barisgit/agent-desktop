@@ -45,6 +45,11 @@ background-computer-use (`NativeWindowServerPreparation.swift`,
   `source_window_id`; raw `--xy` must pass `--window-id`. Core re-verifies the
   window with `resolve_window_strict` under the interaction lease right before
   posting (title left empty because titles change).
+- **Only accept refs from an ordinary window.** A menu, sheet, popover, alert,
+  or focused-surface ref does not live in its recorded `source_window_id`, and
+  without a hit test the event would land on whatever that window shows at the
+  point. Such refs fail as `ACTION_NOT_SUPPORTED` (`not_delivered`) before the
+  element is resolved.
 - **Check geometry against the window only.** The point must lie inside the
   window bounds. Offscreen and covered windows are valid targets; there is no
   occlusion or on-screen requirement, because nothing is hit-tested against
