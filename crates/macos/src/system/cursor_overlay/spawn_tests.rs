@@ -123,6 +123,48 @@ fn previous_generation_renderer_is_retired_with_a_disable_it_can_decode() {
     );
 }
 
+/// An older renderer that takes the Disable but never acknowledges it must not
+/// keep the shared startup lock for the caller's whole deadline, because every
+/// other agent's cursor waits on that lock.
+#[test]
+fn unresponsive_previous_generation_holds_the_startup_lock_only_briefly() {
+    let unique = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let directory =
+        std::path::PathBuf::from(format!("/private/tmp/cu-{}-{unique:x}", std::process::id()));
+    std::os::unix::fs::DirBuilderExt::mode(&mut std::fs::DirBuilder::new(), 0o700)
+        .create(&directory)
+        .unwrap();
+    let lock_path = directory.join("start.lock");
+    let socket = directory.join("v2.sock");
+    let listener = UnixListener::bind(&socket).unwrap();
+    let receiver = thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        let mut payload = Vec::new();
+        stream.read_to_end(&mut payload).unwrap();
+        thread::sleep(Duration::from_secs(2));
+    });
+
+    let started = Instant::now();
+    let lock = lock_and_retire(
+        &lock_path,
+        [socket],
+        "run-stuck",
+        started + Duration::from_secs(5),
+    );
+    let held = started.elapsed();
+    drop(lock);
+    receiver.join().unwrap();
+    let _ = std::fs::remove_dir_all(&directory);
+
+    assert!(
+        held < RETIRE_TIMEOUT + Duration::from_millis(300),
+        "{held:?}"
+    );
+}
+
 /// A previous-generation CLI binds its renderer socket while holding the
 /// shared startup lock. The retirement must still reach that renderer even
 /// though its socket did not exist when this caller began waiting.

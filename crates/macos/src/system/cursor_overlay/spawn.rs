@@ -13,6 +13,12 @@ use super::child::{MARKER, SOCKET_ENV};
 
 const MAX_INSTRUCTION_BYTES: usize = 4 * 1024;
 
+/// Upper bound for telling older-generation renderers to stop. Retirement runs
+/// under the shared startup lock that every agent's cursor waits on, so a slow
+/// old renderer must not hold it for the caller's whole deadline. A healthy
+/// renderer acknowledges Disable immediately.
+const RETIRE_TIMEOUT: Duration = Duration::from_millis(300);
+
 pub(crate) fn update(control: &CursorOverlayControl) -> Result<(), AdapterError> {
     control.validate()?;
     if control.is_disable() || (control.is_transient() && control.agent_id().is_none()) {
@@ -199,12 +205,21 @@ fn older_generations(control: &CursorOverlayControl) -> impl Iterator<Item = Pat
     sockets.into_iter().flatten()
 }
 
-/// Sends Disable, the one control every generation decodes, to each socket.
-/// A missing or unresponsive socket just means there is nothing to stop.
+/// Sends Disable, the one control every generation decodes, to each socket,
+/// within at most [`RETIRE_TIMEOUT`]. A missing socket just means there is
+/// nothing to stop; an unresponsive one is logged and left behind so the
+/// current renderer can still start.
 fn retire(sockets: impl IntoIterator<Item = PathBuf>, session_id: &str, deadline: Instant) {
+    let deadline = deadline.min(Instant::now() + RETIRE_TIMEOUT);
     let disable = CursorOverlayControl::disable(session_id.to_owned());
     for socket in sockets {
-        let _ = send_until(&socket, &disable, deadline);
+        if let Err(error) = send_until(&socket, &disable, deadline) {
+            tracing::warn!(
+                socket = %socket.display(),
+                %error,
+                "could not retire an older cursor overlay renderer; continuing"
+            );
+        }
     }
 }
 
