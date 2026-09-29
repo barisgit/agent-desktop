@@ -20,7 +20,7 @@ agent-desktop mouse-click --background --window-id w-9555 --xy 500,300
 agent-desktop mouse-move --background --window-id w-9555 --xy 500,300
 ```
 
-- **Target.** A ref hover takes the process, process instance, and exact window from the ref and aims at the element's live center. `--xy` has no identity of its own, so it requires `--window-id` (from `list-windows`); `--window-id` without `--background`, or alongside a ref, is `INVALID_ARGS`. Batch entries use `"background": true` and `"window_id"`.
+- **Target.** A ref hover takes the process, process instance, and exact window from the ref and aims at the element's live center. The ref must come from an ordinary window snapshot; a ref from a menu, sheet, popover, alert, or `--surface focused` snapshot is `ACTION_NOT_SUPPORTED` with nothing delivered, because there is no hit test to find where that surface really is. Use the semantic ref action (no `--background`) or `--headed` for those. `--xy` has no identity of its own, so it requires `--window-id` (from `list-windows`); `--window-id` without `--background`, or alongside a ref, is `INVALID_ARGS`. Batch entries use `"background": true` and `"window_id"`.
 - **Geometry.** The point must lie inside the target window's bounds (`INVALID_ARGS`, `not_delivered` otherwise). The window may be offscreen, on another workspace, or covered: pid-targeted delivery skips the window server's hit test, so there is no occlusion check.
 - **Identity.** The window is re-verified against its pid and process instance under the interaction lease immediately before posting; a mismatch fails as `STALE_REF` with nothing delivered.
 - **`--wait-for`.** A post-action wait observes the target window (ref or `--window-id`), never the user's frontmost app.

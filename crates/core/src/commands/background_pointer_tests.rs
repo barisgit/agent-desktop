@@ -89,6 +89,43 @@ fn ref_without_exact_source_window_is_rejected() {
 }
 
 #[test]
+fn ref_from_a_non_window_surface_is_rejected_before_any_delivery() {
+    use crate::adapter::SnapshotSurface;
+
+    let _guard = HomeGuard::new();
+    for surface in [
+        SnapshotSurface::Menu,
+        SnapshotSurface::Sheet,
+        SnapshotSurface::Popover,
+        SnapshotSurface::Alert,
+        SnapshotSurface::Focused,
+    ] {
+        let snapshot_id = ref_snapshot_on(Some(WINDOW_ID), surface);
+        let adapter = BackgroundCaptureAdapter::new();
+
+        let err = execute(
+            ref_args(left_click(1), snapshot_id),
+            &adapter,
+            &CommandContext::default(),
+        )
+        .unwrap_err();
+
+        assert_eq!(err.code(), "ACTION_NOT_SUPPORTED", "surface {surface:?}");
+        let AppError::Adapter(error) = err else {
+            panic!("expected adapter error");
+        };
+        assert_eq!(error.disposition, DeliverySemantics::not_delivered());
+        assert!(
+            error.message.contains(surface.as_str()),
+            "message names the surface: {}",
+            error.message
+        );
+        assert!(adapter.expected_windows.lock().unwrap().is_empty());
+        assert!(adapter.delivered().is_empty());
+    }
+}
+
+#[test]
 fn window_owned_by_a_different_process_is_rejected_before_posting() {
     let _guard = HomeGuard::new();
     let snapshot_id = ref_snapshot(Some(WINDOW_ID));

@@ -2,7 +2,7 @@ use serde_json::{Value, json};
 
 use crate::{
     AdapterError, AppError, BackgroundDeliveryReport, BackgroundFocusGuard, DeliverySemantics,
-    ErrorCode, RefEntry, WindowInfo, WindowState, context::CommandContext,
+    ErrorCode, RefEntry, SnapshotSurface, WindowInfo, WindowState, context::CommandContext,
 };
 
 /// Rules shared by every opt-in background delivery (`--background` pointer
@@ -22,7 +22,28 @@ pub(crate) fn reject_headed(context: &CommandContext) -> Result<(), AppError> {
 /// The exact window a ref was captured from. The title is left empty because
 /// titles are mutable and the pid, process instance, and window number
 /// already pin the identity.
+///
+/// Only refs from an ordinary window snapshot qualify. A menu, sheet,
+/// popover, alert, or focused-surface ref does not live in its recorded
+/// source window, and background delivery skips the window server's hit test
+/// and key-window routing, so pointer events would land on whatever that
+/// window shows at the point and keys would reach the wrong element.
 pub(crate) fn ref_window(entry: &RefEntry) -> Result<WindowInfo, AppError> {
+    let surface = entry.source.source_surface;
+    if !SnapshotSurface::is_window(&surface) {
+        return Err(not_delivered(
+            ErrorCode::ActionNotSupported,
+            format!(
+                "Background delivery cannot target a ref from a {} surface; it needs a ref from an ordinary window",
+                surface.as_str()
+            ),
+        )
+        .with_details(json!({ "source_surface": surface.as_str() }))
+        .with_suggestion(
+            "Drop --background to use the headless semantic action on this ref, or use --headed for real input.",
+        )
+        .into());
+    }
     let process_instance = entry
         .process
         .process_instance
