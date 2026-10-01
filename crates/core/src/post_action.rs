@@ -118,13 +118,14 @@ fn mismatch_error(action: &Action) -> AdapterError {
         "Post-action state does not match the requested change",
     );
     if matches!(action, Action::TypeText(_)) {
-        return error.with_suggestion(
-            "Some fields, often in Chromium and Electron apps, accept typed text without applying it. \
-             Read the field with 'get', then write the full intended value with 'set-value'.",
-        );
+        return error.with_suggestion(TYPE_MISMATCH_SUGGESTION);
     }
     error
 }
+
+const TYPE_MISMATCH_SUGGESTION: &str = "Some fields, often in Chromium and Electron apps, accept typed text without applying it. \
+     Read the field with 'get', then write the full intended value with 'set-value'. \
+     For editors such as Monaco that ignore accessibility text writes, use keyboard delivery with 'type --headed'.";
 
 fn secure_value_is_redacted(action: &Action, observed: &LiveElement) -> bool {
     action.writes_element_value()
@@ -175,7 +176,10 @@ fn checked(element: &LiveElement) -> Option<bool> {
     ))
 }
 
-fn expected_insertion(
+/// Returns `before` with `text` replacing the UTF-16 `selection`. An empty
+/// value with no selection inserts at the start. Returns `None` when the
+/// range is unknown, out of bounds, or splits a surrogate pair.
+pub fn expected_insertion(
     before: &str,
     text: &str,
     selection: Option<std::ops::Range<usize>>,
