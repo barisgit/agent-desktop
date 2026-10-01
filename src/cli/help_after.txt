@@ -136,6 +136,7 @@ EXAMPLES
   agent-desktop click @e5 --snapshot <snapshot_id>
   agent-desktop check @e3 --snapshot <snapshot_id>
   agent-desktop type @e2 --snapshot <snapshot_id> "hello@example.com"
+  agent-desktop type --background --window-id w-4521 --text "hello"
   agent-desktop press cmd+z
   agent-desktop --headed drag --from @s8f3k2p9:e1 --to @s8f3k2p9:e5
   agent-desktop --headed hover @s8f3k2p9:e5

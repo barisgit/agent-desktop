@@ -343,7 +343,7 @@ fn batch_decodes_background_pointer_fields_like_the_cli() {
 #[test]
 fn batch_background_items_share_cli_routing_and_rejections() {
     let _home = crate::dispatch::test_support::HomeGuard::new();
-    let adapter = crate::dispatch::test_support::BackgroundPointerAdapter::new();
+    let adapter = crate::dispatch::test_support::BackgroundAdapter::new();
     let args = BatchArgs {
         commands_json: serde_json::json!([
             {"command": "mouse-click", "args": {"xy": "10,20", "background": true, "window_id": "w-9555"}},

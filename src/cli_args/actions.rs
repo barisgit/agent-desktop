@@ -21,22 +21,45 @@ fn default_ref_timeout_ms() -> u64 {
     5000
 }
 
+/// `type REF TEXT` is the only positional form, so a lone positional is always
+/// a ref and is never typed as text. The window-only form,
+/// `type --background --window-id w-N --text TEXT`, has no ref and takes its
+/// text from `--text`. Batch JSON has no positional ambiguity and always
+/// uses `text`.
 #[derive(Parser, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct TypeArgs {
     #[arg(
         value_name = "REF",
-        help = "Qualified ref from snapshot (@<snapshot_id>:eN), or legacy @eN with --snapshot"
+        help = "Qualified ref from snapshot (@<snapshot_id>:eN), or legacy @eN with --snapshot; omit only for --background --window-id --text"
     )]
-    pub ref_id: String,
+    #[serde(default)]
+    pub ref_id: Option<String>,
     #[arg(
         long,
         value_name = "SNAPSHOT_ID",
         help = "Snapshot ID required for a legacy bare @eN ref; omit for a qualified ref"
     )]
     pub snapshot: Option<String>,
-    #[arg(value_name = "TEXT", allow_hyphen_values = true, help = "Text to type")]
-    pub text: String,
+    #[arg(
+        value_name = "TEXT",
+        allow_hyphen_values = true,
+        required_unless_present = "text_flag",
+        conflicts_with = "text_flag",
+        help = "Text to type into the ref"
+    )]
+    #[serde(default)]
+    pub text: Option<String>,
+    #[arg(
+        long = "text",
+        id = "text_flag",
+        value_name = "TEXT",
+        allow_hyphen_values = true,
+        requires = "window_id",
+        help = "Text to type for the window-only form: type --background --window-id w-N --text TEXT"
+    )]
+    #[serde(skip)]
+    pub text_flag: Option<String>,
     #[arg(
         long = "timeout-ms",
         default_value_t = 5000,
@@ -44,6 +67,19 @@ pub(crate) struct TypeArgs {
     )]
     #[serde(default = "default_ref_timeout_ms")]
     pub timeout_ms: u64,
+    #[arg(
+        long,
+        help = "Opt-in, best-effort Unicode key events posted to the target window's process without activating the app (macOS, private SkyLight SPI); a ref must accept confirmed accessibility focus first; focus preservation is best effort; conflicts with --headed"
+    )]
+    #[serde(default)]
+    pub background: bool,
+    #[arg(
+        long = "window-id",
+        value_name = "WINDOW_ID",
+        help = "Exact target window for --background without a ref (from list-windows, e.g. w-15592), with the text in --text; keys reach that window's focused element"
+    )]
+    #[serde(default)]
+    pub window_id: Option<String>,
 }
 
 #[derive(Parser, Debug, Deserialize)]
@@ -148,8 +184,10 @@ pub(crate) struct PressArgs {
     pub app: Option<String>,
     #[arg(
         long = "window-id",
+        value_name = "WINDOW_ID",
         help = "Target the application instance that owns this window (from list-windows); \
-                use it when several instances share one name"
+                use it when several instances share one name. With --background, the exact \
+                window whose process receives the key events"
     )]
     #[serde(default)]
     pub window_id: Option<String>,
@@ -159,6 +197,12 @@ pub(crate) struct PressArgs {
     )]
     #[serde(default)]
     pub force: bool,
+    #[arg(
+        long,
+        help = "Post the combo to the --window-id window's process without matching menu items (macOS); not activating the app or taking keyboard focus is best effort, reported as focus_change and focus_guard; conflicts with --headed and --app"
+    )]
+    #[serde(default)]
+    pub background: bool,
 }
 
 #[derive(Parser, Debug, Deserialize)]

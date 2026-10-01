@@ -14,6 +14,9 @@ pub(crate) struct ProcessSerialNumber {
 }
 
 type PostToPid = unsafe extern "C" fn(libc::pid_t, *mut c_void);
+type SetAuthenticationMessage = unsafe extern "C" fn(*mut c_void, *mut c_void);
+type AuthenticationMessageFactory =
+    unsafe extern "C" fn(*mut c_void, *mut c_void, *mut c_void, i32, u32) -> *mut c_void;
 type SetWindowLocation = unsafe extern "C" fn(*mut c_void, CGPoint);
 type PostEventRecordTo = unsafe extern "C" fn(*const ProcessSerialNumber, *const u8) -> i32;
 type GetFrontProcess = unsafe extern "C" fn(*mut ProcessSerialNumber) -> i32;
@@ -34,8 +37,19 @@ const CPS_NO_WINDOWS: u32 = 0x400;
 /// front-process calls with a leading underscore and cua without, so both
 /// spellings are tried.
 struct Symbols {
+    events: EventSymbols,
+    processes: ProcessSymbols,
+}
+
+/// Entry points that post or annotate a `CGEvent`.
+struct EventSymbols {
     post_to_pid: Option<PostToPid>,
+    set_authentication_message: Option<SetAuthenticationMessage>,
     set_window_location: Option<SetWindowLocation>,
+}
+
+/// Entry points that address a process by its serial number.
+struct ProcessSymbols {
     post_event_record: Option<PostEventRecordTo>,
     get_front_process: Option<GetFrontProcess>,
     set_front_process: Option<SetFrontProcessWithOptions>,
@@ -54,15 +68,20 @@ fn load_symbols() -> Symbols {
     unsafe {
         libc::dlopen(SKYLIGHT_PATH.as_ptr(), libc::RTLD_LAZY);
         Symbols {
-            post_to_pid: lookup(c"SLEventPostToPid"),
-            set_window_location: lookup(c"CGEventSetWindowLocation"),
-            post_event_record: lookup(c"SLPSPostEventRecordTo"),
-            get_front_process: lookup(c"_SLPSGetFrontProcess")
-                .or_else(|| lookup(c"SLPSGetFrontProcess")),
-            set_front_process: lookup(c"_SLPSSetFrontProcessWithOptions")
-                .or_else(|| lookup(c"SLPSSetFrontProcessWithOptions")),
-            process_for_pid: lookup(c"GetProcessForPID"),
-            pid_for_process: lookup(c"GetProcessPID"),
+            events: EventSymbols {
+                post_to_pid: lookup(c"SLEventPostToPid"),
+                set_authentication_message: lookup(c"SLEventSetAuthenticationMessage"),
+                set_window_location: lookup(c"CGEventSetWindowLocation"),
+            },
+            processes: ProcessSymbols {
+                post_event_record: lookup(c"SLPSPostEventRecordTo"),
+                get_front_process: lookup(c"_SLPSGetFrontProcess")
+                    .or_else(|| lookup(c"SLPSGetFrontProcess")),
+                set_front_process: lookup(c"_SLPSSetFrontProcessWithOptions")
+                    .or_else(|| lookup(c"SLPSSetFrontProcessWithOptions")),
+                process_for_pid: lookup(c"GetProcessForPID"),
+                pid_for_process: lookup(c"GetProcessPID"),
+            },
         }
     }
 }
@@ -85,17 +104,69 @@ unsafe fn lookup<T: Copy>(name: &CStr) -> Option<T> {
 /// Posts through `SLEventPostToPid`; `false` means the symbol is missing and
 /// nothing was posted, so the caller may fall back without double delivery.
 pub(crate) fn post_to_pid(pid: libc::pid_t, event: &CGEvent) -> bool {
-    let Some(post) = symbols().post_to_pid else {
+    let Some(post) = symbols().events.post_to_pid else {
         return false;
     };
     unsafe { post(pid, event.as_ptr().cast()) };
     true
 }
 
+unsafe extern "C" {
+    fn objc_getClass(name: *const std::ffi::c_char) -> *mut c_void;
+    fn object_getClass(object: *mut c_void) -> *mut c_void;
+    fn sel_registerName(name: *const std::ffi::c_char) -> *mut c_void;
+    fn class_respondsToSelector(class: *mut c_void, selector: *mut c_void) -> i8;
+    fn objc_msgSend(receiver: *mut c_void, selector: *mut c_void, ...) -> *mut c_void;
+}
+
+/// Offset of the `SLSEventRecord *` inside `__CGEvent`, whose SkyLight type
+/// encoding is `{CFRuntimeBase, uint32_t, SLSEventRecord *}`: a 16-byte
+/// runtime base, the `uint32_t`, and 4 bytes of padding on 64-bit.
+const EVENT_RECORD_OFFSET: usize = 24;
+
+/// Attaches an `SLSEventAuthenticationMessage` for `pid` to a keyboard
+/// event, as cua does before `SLEventPostToPid`: on macOS 15+ the window
+/// server passes synthetic keys to Chromium targets only with one attached.
+/// `false` means the message could not be built (macOS 14 has the class but
+/// not `messageWithEventRecord:pid:version:`) and the event is unchanged.
+///
+/// The factory returns an autoreleased object; with no pool on this thread
+/// it lives until the process exits, one small object per key event.
+pub(crate) fn authenticate(event: &CGEvent, pid: libc::pid_t) -> bool {
+    let Some(set_message) = symbols().events.set_authentication_message else {
+        return false;
+    };
+    unsafe {
+        let class = objc_getClass(c"SLSEventAuthenticationMessage".as_ptr());
+        let selector = sel_registerName(c"messageWithEventRecord:pid:version:".as_ptr());
+        if class.is_null() || class_respondsToSelector(object_getClass(class), selector) == 0 {
+            return false;
+        }
+
+        let event_ptr = event.as_ptr().cast::<u8>();
+        let record = event_ptr
+            .add(EVENT_RECORD_OFFSET)
+            .cast::<*mut c_void>()
+            .read_unaligned();
+        if record.is_null() {
+            return false;
+        }
+
+        let factory: AuthenticationMessageFactory =
+            std::mem::transmute(objc_msgSend as *const c_void);
+        let message = factory(class, selector, record, pid, 0);
+        if message.is_null() {
+            return false;
+        }
+        set_message(event_ptr.cast(), message);
+    }
+    true
+}
+
 /// Sets the window-local location AppKit reports as `locationInWindow`;
 /// `false` means `CGEventSetWindowLocation` is unavailable.
 pub(crate) fn set_window_location(event: &CGEvent, location: CGPoint) -> bool {
-    let Some(set) = symbols().set_window_location else {
+    let Some(set) = symbols().events.set_window_location else {
         return false;
     };
     unsafe { set(event.as_ptr().cast(), location) };
@@ -103,21 +174,21 @@ pub(crate) fn set_window_location(event: &CGEvent, location: CGPoint) -> bool {
 }
 
 pub(crate) fn process_serial_number(pid: libc::pid_t) -> Option<ProcessSerialNumber> {
-    let lookup = symbols().process_for_pid?;
+    let lookup = symbols().processes.process_for_pid?;
     let mut psn = ProcessSerialNumber::default();
     (unsafe { lookup(pid, &mut psn) } == 0).then_some(psn)
 }
 
 /// `None` when `SLPSPostEventRecordTo` is missing, otherwise its status.
 pub(crate) fn post_event_record(psn: &ProcessSerialNumber, record: &[u8]) -> Option<i32> {
-    let post = symbols().post_event_record?;
+    let post = symbols().processes.post_event_record?;
     Some(unsafe { post(psn, record.as_ptr()) })
 }
 
 /// The window server's frontmost process, which stays current in a CLI that
 /// never spins an AppKit run loop.
 pub(crate) fn front_process_pid() -> Option<libc::pid_t> {
-    let symbols = symbols();
+    let symbols = &symbols().processes;
     let (get_front, pid_for) = (symbols.get_front_process?, symbols.pid_for_process?);
     let mut psn = ProcessSerialNumber::default();
     if unsafe { get_front(&mut psn) } != 0 {
@@ -131,7 +202,7 @@ pub(crate) fn front_process_pid() -> Option<libc::pid_t> {
 /// called for the user's own previously frontmost app, never the target.
 /// `None` when the symbols are missing, otherwise whether it succeeded.
 pub(crate) fn restore_front_process(pid: libc::pid_t) -> Option<bool> {
-    let set_front = symbols().set_front_process?;
+    let set_front = symbols().processes.set_front_process?;
     let psn = process_serial_number(pid)?;
     Some(unsafe { set_front(&psn, 0, CPS_NO_WINDOWS) } == 0)
 }

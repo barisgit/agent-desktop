@@ -147,6 +147,9 @@ An explicit opt-in, best-effort synthetic pointer path (`--background` on `hover
 
 The target is always an exact window verified against its process instance just before delivery: a ref supplies it, raw coordinates must name it. Geometry is checked against the window's own bounds only, since the window server's hit test is bypassed and the window may be offscreen or covered. Whether the application acts on the event is its own decision, so the result is delivered-but-unverified and reports any frontmost-application change, including a brief one that was restored, instead of claiming a silent success.
 
+### Background Keyboard
+The keyboard counterpart of the background pointer (`--background` on `press` and `type`). Keys go to the process owning one exact window, which is first made that process's key window without deliberately activating the app; keeping the user's frontmost application is best effort. A `press` names the window with `--window-id`; a `type` either takes it from a ref, and then sends keys only after semantic focus on the element is confirmed, or names it with `--window-id` and types into the window's focused field. It never maps keys to menu items or accessibility actions and never reads the typed value, so the result is delivered-but-unverified in the same way.
+
 ### FFI Ref-Action Parity
 The requirement that language bindings using refs follow the same strict resolution, actionability, and interaction-policy semantics as CLI ref commands.
 

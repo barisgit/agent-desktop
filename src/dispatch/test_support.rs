@@ -64,25 +64,34 @@ impl SystemOps for FailingOverlayAdapter {
     }
 }
 
-/// Records background pointer deliveries and counts real cursor events so
-/// routing tests can prove which path a command took.
-pub(crate) struct BackgroundPointerAdapter {
+/// Records background pointer and keyboard deliveries and counts real cursor
+/// events so routing tests can prove which path a command took.
+pub(crate) struct BackgroundAdapter {
     pub(crate) background: Mutex<
         Vec<(
             agent_desktop_core::WindowInfo,
             agent_desktop_core::MouseEvent,
         )>,
     >,
+    pub(crate) background_keys: Mutex<
+        Vec<(
+            agent_desktop_core::WindowInfo,
+            agent_desktop_core::BackgroundKeyInput,
+        )>,
+    >,
     pub(crate) real_mouse_events: Mutex<u32>,
+    pub(crate) app_key_pids: Mutex<Vec<u32>>,
 }
 
-impl BackgroundPointerAdapter {
+impl BackgroundAdapter {
     pub(crate) const WINDOW_ID: &'static str = "w-9555";
 
     pub(crate) fn new() -> Self {
         Self {
             background: Mutex::new(Vec::new()),
+            background_keys: Mutex::new(Vec::new()),
             real_mouse_events: Mutex::new(0),
+            app_key_pids: Mutex::new(Vec::new()),
         }
     }
 
@@ -104,7 +113,20 @@ impl BackgroundPointerAdapter {
     }
 }
 
-impl ObservationOps for BackgroundPointerAdapter {
+impl ObservationOps for BackgroundAdapter {
+    fn list_apps(
+        &self,
+        _deadline: agent_desktop_core::Deadline,
+    ) -> Result<Vec<agent_desktop_core::AppInfo>, AdapterError> {
+        Ok(vec![agent_desktop_core::AppInfo {
+            name: "Code".into(),
+            pid: agent_desktop_core::ProcessId::new(4242),
+            bundle_id: None,
+            process_instance: Some("instance".into()),
+            presentation: None,
+        }])
+    }
+
     fn list_windows(
         &self,
         _filter: &agent_desktop_core::WindowFilter,
@@ -114,9 +136,9 @@ impl ObservationOps for BackgroundPointerAdapter {
     }
 }
 
-impl ActionOps for BackgroundPointerAdapter {}
+impl ActionOps for BackgroundAdapter {}
 
-impl InputOps for BackgroundPointerAdapter {
+impl InputOps for BackgroundAdapter {
     fn mouse_event(
         &self,
         _event: agent_desktop_core::MouseEvent,
@@ -131,21 +153,47 @@ impl InputOps for BackgroundPointerAdapter {
         window: &agent_desktop_core::WindowInfo,
         event: agent_desktop_core::MouseEvent,
         _lease: &agent_desktop_core::InteractionLease,
-    ) -> Result<agent_desktop_core::BackgroundPointerReport, AdapterError> {
+    ) -> Result<agent_desktop_core::BackgroundDeliveryReport, AdapterError> {
         self.background
             .lock()
             .unwrap()
             .push((window.clone(), event));
-        Ok(agent_desktop_core::BackgroundPointerReport::default())
+        Ok(agent_desktop_core::BackgroundDeliveryReport::default())
+    }
+
+    fn background_key_input(
+        &self,
+        window: &agent_desktop_core::WindowInfo,
+        input: &agent_desktop_core::BackgroundKeyInput,
+        _lease: &agent_desktop_core::InteractionLease,
+    ) -> Result<agent_desktop_core::BackgroundDeliveryReport, AdapterError> {
+        self.background_keys
+            .lock()
+            .unwrap()
+            .push((window.clone(), input.clone()));
+        Ok(agent_desktop_core::BackgroundDeliveryReport::default())
     }
 }
 
-impl SystemOps for BackgroundPointerAdapter {
+impl SystemOps for BackgroundAdapter {
     fn acquire_interaction_lease(
         &self,
         deadline: agent_desktop_core::Deadline,
     ) -> Result<agent_desktop_core::InteractionLease, AdapterError> {
         agent_desktop_core::InteractionLease::guarded(deadline, ())
+    }
+
+    fn press_key_for_app(
+        &self,
+        process: agent_desktop_core::ProcessIdentity,
+        _combo: &agent_desktop_core::KeyCombo,
+        _policy: agent_desktop_core::InteractionPolicy,
+        _lease: &agent_desktop_core::InteractionLease,
+    ) -> Result<agent_desktop_core::ActionResult, AdapterError> {
+        self.app_key_pids.lock().unwrap().push(process.pid.get());
+        Ok(agent_desktop_core::ActionResult::delivered_unverified(
+            "PressKey",
+        ))
     }
 
     fn resolve_window_strict(

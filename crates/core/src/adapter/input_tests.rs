@@ -32,6 +32,24 @@ fn default_background_mouse_event_is_not_supported() {
 }
 
 #[test]
+fn default_background_key_input_is_not_supported() {
+    let window = crate::WindowInfo {
+        id: "w-1".into(),
+        title: String::new(),
+        app: String::new(),
+        pid: crate::ProcessId::new(1),
+        process_instance: None,
+        bounds: None,
+        state: crate::WindowState::default(),
+    };
+    let input = crate::BackgroundKeyInput::Text("x".into());
+    let err = DefaultOnly
+        .background_key_input(&window, &input, &lease())
+        .unwrap_err();
+    assert_eq!(err.code, ErrorCode::PlatformNotSupported);
+}
+
+#[test]
 fn default_clear_clipboard_is_not_supported() {
     let err = DefaultOnly.clear_clipboard(&lease()).unwrap_err();
     assert_eq!(err.code, ErrorCode::PlatformNotSupported);

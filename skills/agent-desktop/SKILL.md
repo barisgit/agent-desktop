@@ -196,9 +196,14 @@ agent-desktop --headed mouse-click --xy 500,300 # Click at coordinates
 agent-desktop --headed mouse-move --xy 100,200  # Move cursor
 agent-desktop hover @s8f3k2p9:e5 --background   # Opt-in synthetic hover in a background window; cursor stays put (macOS)
 agent-desktop mouse-click --background --window-id w-9555 --xy 500,300 # Click inside one exact background window
+agent-desktop type @s8f3k2p9:e7 "hello" --background # Type into a background window's element as key events (macOS, best effort)
+agent-desktop type --background --window-id w-9555 --text "hello" # Type into whatever that window has focused
+agent-desktop press cmd+s --background --window-id w-9555 # Send a combo to one background window without activating it
 ```
 
 `--background` (macOS; `hover`, `mouse-move`, `mouse-click`) is an explicit opt-in, best-effort synthetic-input mode: it posts the event to the process owning one exact window through private SkyLight SPI. The real cursor does not move and the window is not raised, but focus preservation is best effort: the target may activate itself, so read `data.background.focus_change` (`unchanged`, `restored`, `changed`, `unknown`) and `focus_guard`. A ref derives the process and window; `--xy` needs `--window-id` and a point inside that window (it may be offscreen or covered). It cannot be combined with `--headed`. Success is `delivered_unverified` (`retry: unsafe`); confirm the effect with a fresh `snapshot`. Details: [background-input.md](references/background-input.md).
+
+`press` and `type` also accept `--background` (macOS): an opt-in, best-effort mode where keys go to one exact window's process after that window is made key inside its app, without deliberately activating it. `press --background` needs `--window-id` (not `--app`), while plain `press --window-id` only picks the app instance that owns the window; `type <ref>` takes the window from its ref and sends nothing unless accessibility focus on the element is confirmed (`ACTION_FAILED` otherwise) and must come from an ordinary window snapshot, not a menu, sheet, popover, or alert (`ACTION_NOT_SUPPORTED`); `type --window-id w-N --text TEXT` types into the window's focused field. No key is mapped to a menu item or AX action. The result is `delivered_unverified` like the background pointer; confirm the text with `snapshot` and do not retry blindly.
 
 `key-down`, `key-up`, `mouse-down`, and `mouse-up` return `ACTION_NOT_SUPPORTED` until a stateful daemon can own held-input lifetime. Use `press`, `mouse-click`, or `drag` instead.
 

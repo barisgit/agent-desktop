@@ -1,6 +1,7 @@
 use crate::{BackgroundFocusGuard, ProcessId};
 
-/// Evidence an adapter gathers around one background pointer delivery.
+/// Evidence an adapter gathers around one background pointer or keyboard
+/// delivery.
 ///
 /// Background delivery tries not to activate the target, but the target
 /// process decides for itself how to react to posted events, so the command
@@ -9,7 +10,7 @@ use crate::{BackgroundFocusGuard, ProcessId};
 /// `layers` names the platform delivery techniques that were requested and
 /// `degradations` explains any of them that were unavailable or failed.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct BackgroundPointerReport {
+pub struct BackgroundDeliveryReport {
     pub frontmost_pid_before: Option<ProcessId>,
     pub frontmost_pid_after: Option<ProcessId>,
     pub layers: Vec<String>,
@@ -17,7 +18,7 @@ pub struct BackgroundPointerReport {
     pub focus_guard: Option<BackgroundFocusGuard>,
 }
 
-impl BackgroundPointerReport {
+impl BackgroundDeliveryReport {
     /// `"unchanged"`, `"restored"` when the frontmost application was
     /// observed away from the user's app during delivery (whether the focus
     /// guard took it back or it returned on its own), `"changed"`, or
@@ -44,8 +45,8 @@ mod tests {
         before: Option<u32>,
         after: Option<u32>,
         interventions: u32,
-    ) -> BackgroundPointerReport {
-        BackgroundPointerReport {
+    ) -> BackgroundDeliveryReport {
+        BackgroundDeliveryReport {
             frontmost_pid_before: before.map(ProcessId::new),
             frontmost_pid_after: after.map(ProcessId::new),
             focus_guard: Some(BackgroundFocusGuard {
@@ -54,7 +55,7 @@ mod tests {
                 max_steal_ms: 0,
                 yielded: false,
             }),
-            ..BackgroundPointerReport::default()
+            ..BackgroundDeliveryReport::default()
         }
     }
 

@@ -1,4 +1,5 @@
 mod app_window;
+mod background_keyboard;
 mod background_pointer;
 mod clipboard;
 mod cursor_overlay;

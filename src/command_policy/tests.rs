@@ -240,3 +240,42 @@ fn background_pointer_commands_keep_accessibility_preflight_and_ref_validation()
         "INVALID_ARGS"
     );
 }
+
+#[test]
+fn background_key_commands_keep_accessibility_preflight_and_ref_validation() {
+    let report = PermissionReport {
+        accessibility: PermissionState::Denied {
+            suggestion: "grant accessibility".into(),
+        },
+        screen_recording: PermissionState::Granted,
+        automation: PermissionState::NotRequired,
+    };
+    let press = Commands::Press(
+        <crate::cli_args::actions::PressArgs as clap::Parser>::try_parse_from([
+            "press",
+            "return",
+            "--background",
+            "--window-id",
+            "w-9555",
+        ])
+        .unwrap(),
+    );
+    let bad_type = Commands::Type(
+        <crate::cli_args::actions::TypeArgs as clap::Parser>::try_parse_from([
+            "type",
+            "bad-ref",
+            "hi",
+            "--background",
+        ])
+        .unwrap(),
+    );
+
+    assert_eq!(
+        preflight(&press, &report).unwrap_err().code(),
+        "PERM_DENIED"
+    );
+    assert_eq!(
+        preflight(&bad_type, &report).unwrap_err().code(),
+        "INVALID_ARGS"
+    );
+}
