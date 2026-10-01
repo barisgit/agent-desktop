@@ -167,6 +167,12 @@ pub(crate) struct ScrollArgs {
     )]
     #[serde(default = "default_ref_timeout_ms")]
     pub timeout_ms: u64,
+    #[arg(
+        long,
+        help = "Opt-in, best-effort line scroll-wheel events posted at the element's center to its window's process (macOS, private SkyLight SPI) instead of the semantic AX scroll, so views that advertise only ScrollTo work too; the real cursor stays put; focus preservation is best effort, see focus_change in the result; conflicts with --headed"
+    )]
+    #[serde(default)]
+    pub background: bool,
 }
 
 #[derive(Parser, Debug, Deserialize)]
