@@ -27,6 +27,9 @@ pub(crate) struct ActionabilityPreflight {
     presentation_point: Option<crate::Point>,
     presentation_bounds: Option<crate::Rect>,
     pointer_delivery: actionability::PointerDelivery,
+    /// Filled once per action just before dispatch, never by a preflight pass:
+    /// preflight can run several times per action and the lookup is costly.
+    presentation_window: Option<(crate::ProcessId, String)>,
 }
 
 impl<'a> ResolvedRefAction<'a> {
@@ -77,7 +80,7 @@ pub(crate) fn dispatch_resolved(
         })?;
     crate::ref_action_wait_support::trace_resolve_ok(target.context, target.ref_id);
     let initial_target = ResolvedRefAction::new(target, &handle);
-    let preflight = match stable_preflight(&initial_target, &request) {
+    let mut preflight = match stable_preflight(&initial_target, &request) {
         Ok(preflight) => preflight,
         Err(error) => {
             let error = into_adapter_error(error);
@@ -107,6 +110,7 @@ pub(crate) fn dispatch_resolved(
         .with_verified_point(preflight.verified_point.clone())
         .with_expected_process(expected_process.clone());
     let final_target = ResolvedRefAction::new(target, &handle);
+    preflight.presentation_window = presentation::window(&final_target);
     final_target.context.trace_lazy(
         "action.dispatch.start",
         || json!({ "ref": final_target.ref_id, "action": request.action.name() }),
@@ -326,6 +330,7 @@ fn check_actionability_with_trace(
         presentation_point: report.presentation_point,
         presentation_bounds: report.presentation_bounds,
         pointer_delivery: report.pointer_delivery,
+        presentation_window: None,
     })
 }
 
@@ -388,9 +393,8 @@ pub(crate) fn into_adapter_error(err: AppError) -> AdapterError {
 }
 
 #[cfg(test)]
-#[path = "ref_action_tests.rs"]
-mod tests;
-
-#[cfg(test)]
 #[path = "ref_action_cursor_overlay_tests.rs"]
 mod cursor_overlay_tests;
+#[cfg(test)]
+#[path = "ref_action_tests.rs"]
+mod tests;
