@@ -84,13 +84,19 @@ pub(crate) enum Commands {
     KeyDown(KeyComboArgs),
     #[command(about = "Release a held key or modifier")]
     KeyUp(KeyComboArgs),
-    #[command(about = "Move cursor to element center or coordinates (requires --headed)")]
+    #[command(
+        about = "Move cursor to element center or coordinates (requires --headed, or --background)"
+    )]
     Hover(HoverArgs),
     #[command(about = "Drag from one element or point to another (requires --headed)")]
     Drag(DragCliArgs),
-    #[command(about = "Move cursor to absolute screen coordinates (requires --headed)")]
+    #[command(
+        about = "Move cursor to absolute screen coordinates (requires --headed, or --background with --window-id)"
+    )]
     MouseMove(MouseMoveArgs),
-    #[command(about = "Click at absolute screen coordinates (requires --headed)")]
+    #[command(
+        about = "Click at absolute screen coordinates (requires --headed, or --background with --window-id)"
+    )]
     MouseClick(MouseClickArgs),
     #[command(about = "Press mouse button at coordinates (requires --headed)")]
     MouseDown(MousePointArgs),

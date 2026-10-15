@@ -30,10 +30,10 @@ KEYBOARD
   key-up <combo>             Release a held key or modifier
 
 MOUSE
-  hover <ref|--xy>           Move cursor to element or coordinates (requires --headed)
+  hover <ref|--xy>           Move cursor to element or coordinates (--headed, or --background)
   drag                       Drag between points; live cursor trail fades after release (requires --headed)
-  mouse-move --xy x,y        Move cursor to absolute coordinates (requires --headed)
-  mouse-click --xy x,y       Click at coordinates (--button, --count; requires --headed)
+  mouse-move --xy x,y        Move cursor to absolute coordinates (--headed, or --background --window-id)
+  mouse-click --xy x,y       Click at coordinates (--button, --count; --headed, or --background --window-id)
   mouse-down --xy x,y        Press mouse button at coordinates (requires --headed)
   mouse-up --xy x,y          Release mouse button at coordinates (requires --headed)
   mouse-wheel --x X --y Y    Post wheel deltas at coordinates (--dx, --dy; --headed, or --background --window-id)
