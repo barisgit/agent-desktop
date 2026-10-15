@@ -22,6 +22,7 @@ pub(crate) mod keyboard;
 mod keyboard_background;
 #[cfg(target_os = "macos")]
 mod keyboard_event;
+pub(crate) mod keyboard_layout;
 pub(crate) mod keyboard_map;
 pub(crate) mod mouse;
 #[cfg(target_os = "macos")]
